@@ -1,0 +1,21 @@
+services:
+  backend:
+    build: .
+    image: ghcr.io/groskopf/onsite-print-backend:${IMAGE_TAG:?Set IMAGE_TAG in .env}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: onsite_print
+      DB_USER: onsite_print
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+secrets:
+  postgres_password:
+    file: ../onsite-print-database/secrets/postgres_password
