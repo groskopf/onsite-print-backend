@@ -59,6 +59,7 @@ for step in 'login ghcr.io' 'compose build' 'compose push'; do
   export FAIL_STEP="$step"
   expect_failure
   [[ "$(tail -n 1 "$CALLS")" == "$step"* ]]
+  [[ "$(cat "$temp/.env")" == IMAGE_TAG=1.0.0 ]]
 done
 unset FAIL_STEP
 
@@ -72,10 +73,12 @@ expected="$(printf '%s\n' \
 [[ "$(cat "$CALLS")" == "$expected" ]]
 grep -q 'Published ghcr.io/groskopf/onsite-print-backend:1.0.0' "$temp/output"
 ! grep -q test-secret "$temp/output"
+[[ "$(cat "$temp/.env")" == IMAGE_TAG=1.0.1 ]]
 
 unset GHCR_USERNAME
 printf '%s\n' IMAGE_TAG=2.0.0 > "$temp/.env"
 bash "$temp/docker-push.sh" > "$temp/output" 2>&1
 grep -q 'login ghcr.io -u groskopf --password-stdin|2.0.0|' "$CALLS"
+[[ "$(cat "$temp/.env")" == IMAGE_TAG=2.0.1 ]]
 
 echo "Publishing script tests passed"

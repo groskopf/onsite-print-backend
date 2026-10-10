@@ -53,11 +53,16 @@ In Compose the password is the `postgres_password` secret, read from
 ## Run
 
 Normally the whole stack is started from `../onsite-print-server`. To run just the
-database and the backend, start the database first, then:
+database and backend on the same Compose network, run from that server repo:
 
 ```sh
-docker compose up -d --build
+docker compose up -d --build postgres backend
 ```
+
+The backend's standalone Compose file supports building and publishing its image
+without defining PostgreSQL. The server Compose file owns the dependency on a
+healthy database. Starting the backend requires a reachable database; starting
+the database separately in another Compose project does not share its network.
 
 For full-stack development, use
 `docker compose -f compose.yaml -f compose.dev.yaml up -d --build` from the
@@ -78,6 +83,13 @@ connection parameters. That test creates events and intentionally leaves them
 in that test database to verify persistence across app restarts.
 
 ## Publish a version
+
+Publishing uses the current `major.minor.patch` tag in `.env`, then increments
+the patch number only after the push succeeds (`0.0.1` -> `0.0.2`). Failures
+leave it unchanged. Commit the updated version file and do not publish
+concurrently. Stale files or retries after an interrupted push can still
+overwrite tags. Use the printed published tag when deploying; the incremented
+tag is not yet available. `latest` and prerelease tags are not supported.
 
 Set the version in `.env` (`IMAGE_TAG=...`) and `CR_PAT` in your environment, then:
 
