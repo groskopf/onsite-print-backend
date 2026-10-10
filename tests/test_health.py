@@ -24,6 +24,8 @@ def test_health_reports_database_version():
     app = FastAPI()
     app.include_router(api)
     app.dependency_overrides[get_connection] = fake_connection
-    response = TestClient(app).get("/api/health")
+    client = TestClient(app)
+    response = client.get("/api/v2/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "database": "PostgreSQL test"}
+    assert client.get("/api/health").status_code == 404
