@@ -78,4 +78,18 @@ printf '%s\n' IMAGE_TAG=2.0.0 > "$temp/.env"
 bash "$temp/docker-push.sh" > "$temp/output" 2>&1
 grep -q 'login ghcr.io -u groskopf --password-stdin|2.0.0|' "$CALLS"
 
+for tag in latest 1.0 01.0.0 1.0.0-rc1 1.2.9 1.2.99 1.2.99999999999999999999; do
+  : > "$CALLS"
+  printf 'IMAGE_TAG=%s\n' "$tag" > "$temp/.env"
+  bash "$temp/docker-push.sh" > "$temp/output" 2>&1
+  [[ "$(cat "$temp/.env")" == "IMAGE_TAG=$tag" ]]
+  expected="$(printf '%s\n' \
+    "login ghcr.io -u groskopf --password-stdin|$tag|$temp" \
+    "compose build --pull backend|$tag|$temp" \
+    "compose push backend|$tag|$temp")"
+  [[ "$(cat "$CALLS")" == "$expected" ]]
+  grep -qF "Published ghcr.io/groskopf/onsite-print-backend:$tag" "$temp/output"
+  ! grep -q test-secret "$temp/output"
+done
+
 echo "Publishing script tests passed"

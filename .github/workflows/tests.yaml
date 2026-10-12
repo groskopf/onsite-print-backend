@@ -1,0 +1,17 @@
+name: Publishing tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test publishing script
+        run: bash tests/docker-push-test.sh
