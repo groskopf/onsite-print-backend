@@ -85,3 +85,7 @@ Set the version in `.env` (`IMAGE_TAG=...`) and `CR_PAT` in your environment, th
 bash docker-push.sh
 bash tests/docker-push-test.sh   # tests the script with a mocked Docker CLI
 ```
+
+GitHub Actions runs the publishing-script tests on pushes and pull requests
+against this repo's own script. They do not build or upload images and require
+no credentials or sibling repositories.
