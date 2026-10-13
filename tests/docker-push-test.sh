@@ -44,7 +44,7 @@ expect_failure 1.0.0
 rm -- "$temp/.env"
 expect_failure
 [[ ! -s "$CALLS" ]]
-for setting in '' 'IMAGE_TAG=' 'IMAGE_TAG=invalid/tag' 'IMAGE_TAG=1.0.0 extra' 'UNRELATED=1.0.0' $'IMAGE_TAG=1.0.0\nEXTRA=value'; do
+for setting in '' 'IMAGE_TAG=' 'IMAGE_TAG=latest' 'IMAGE_TAG=1.0' 'IMAGE_TAG=01.0.0' 'IMAGE_TAG=1.0.0-rc1' 'IMAGE_TAG=invalid/tag' 'IMAGE_TAG=1.0.0 extra' 'UNRELATED=1.0.0' $'IMAGE_TAG=1.0.0\nEXTRA=value'; do
   printf '%s\n' "$setting" > "$temp/.env"
   expect_failure
   [[ ! -s "$CALLS" ]]
@@ -59,6 +59,7 @@ for step in 'login ghcr.io' 'compose build' 'compose push'; do
   export FAIL_STEP="$step"
   expect_failure
   [[ "$(tail -n 1 "$CALLS")" == "$step"* ]]
+  [[ "$(cat "$temp/.env")" == IMAGE_TAG=1.0.0 ]]
 done
 unset FAIL_STEP
 
@@ -71,25 +72,20 @@ expected="$(printf '%s\n' \
   "compose push backend|1.0.0|$temp")"
 [[ "$(cat "$CALLS")" == "$expected" ]]
 grep -q 'Published ghcr.io/groskopf/onsite-print-backend:1.0.0' "$temp/output"
+[[ "$(cat "$temp/.env")" == IMAGE_TAG=1.0.1 ]]
 ! grep -q test-secret "$temp/output"
 
 unset GHCR_USERNAME
 printf '%s\n' IMAGE_TAG=2.0.0 > "$temp/.env"
 bash "$temp/docker-push.sh" > "$temp/output" 2>&1
 grep -q 'login ghcr.io -u groskopf --password-stdin|2.0.0|' "$CALLS"
+[[ "$(cat "$temp/.env")" == IMAGE_TAG=2.0.1 ]]
 
-for tag in latest 1.0 01.0.0 1.0.0-rc1 1.2.9 1.2.99 1.2.99999999999999999999; do
-  : > "$CALLS"
-  printf 'IMAGE_TAG=%s\n' "$tag" > "$temp/.env"
+for versions in '1.2.9 1.2.10' '1.2.99 1.2.100' '1.2.99999999999999999999 1.2.100000000000000000000'; do
+  read -r current next <<< "$versions"
+  printf 'IMAGE_TAG=%s\n' "$current" > "$temp/.env"
   bash "$temp/docker-push.sh" > "$temp/output" 2>&1
-  [[ "$(cat "$temp/.env")" == "IMAGE_TAG=$tag" ]]
-  expected="$(printf '%s\n' \
-    "login ghcr.io -u groskopf --password-stdin|$tag|$temp" \
-    "compose build --pull backend|$tag|$temp" \
-    "compose push backend|$tag|$temp")"
-  [[ "$(cat "$CALLS")" == "$expected" ]]
-  grep -qF "Published ghcr.io/groskopf/onsite-print-backend:$tag" "$temp/output"
-  ! grep -q test-secret "$temp/output"
+  [[ "$(cat "$temp/.env")" == "IMAGE_TAG=$next" ]]
 done
 
 echo "Publishing script tests passed"
