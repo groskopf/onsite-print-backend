@@ -17,6 +17,10 @@ class EventCreate(BaseModel):
     name: str = Field(min_length=1)
     start_date: date
     end_date: date
+    street: str | None = Field(default=None, min_length=1)
+    zip: str | None = Field(default=None, min_length=1)
+    town: str | None = Field(default=None, min_length=1)
+    country: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
@@ -37,11 +41,14 @@ async def create_event(event: EventCreate, connection: Connection) -> Event:
     async with connection.cursor(row_factory=dict_row) as cursor:
         await cursor.execute(
             """
-            INSERT INTO event (name, start_date, end_date)
-            VALUES (%s, %s, %s)
-            RETURNING id, name, start_date, end_date
+            INSERT INTO event (name, start_date, end_date, street, zip, town, country)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, name, start_date, end_date, street, zip, town, country
             """,
-            (event.name, event.start_date, event.end_date),
+            (
+                event.name, event.start_date, event.end_date,
+                event.street, event.zip, event.town, event.country,
+            ),
         )
         row = await cursor.fetchone()
     if row is None:
@@ -53,7 +60,8 @@ async def create_event(event: EventCreate, connection: Connection) -> Event:
 async def list_events(connection: Connection) -> list[Event]:
     async with connection.cursor(row_factory=dict_row) as cursor:
         await cursor.execute(
-            "SELECT id, name, start_date, end_date FROM event ORDER BY id"
+            "SELECT id, name, start_date, end_date, street, zip, town, country "
+            "FROM event ORDER BY id"
         )
         rows = await cursor.fetchall()
     return [Event.model_validate(row) for row in rows]

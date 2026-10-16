@@ -27,6 +27,23 @@ fields are required. Names are trimmed and cannot be blank. The end date must
 be on or after the start date; same-day events are allowed. Invalid requests
 return 422 and do not insert a row. Unknown fields are rejected.
 
+Events also accept optional `street`, `zip`, `town`, and `country` fields.
+Each can be omitted or set to `null`; supplied values must be nonblank strings
+and are trimmed. Zip codes remain strings, preserving leading zeros and letters.
+Create and list responses include all four fields, with `null` for missing values.
+
+```json
+{
+  "name": "Print conference",
+  "start_date": "2026-10-09",
+  "end_date": "2026-10-10",
+  "street": "Main Street 12",
+  "zip": "0123",
+  "town": "Copenhagen",
+  "country": "Denmark"
+}
+```
+
 As requested, PUT creates a new row on each call; repeating it creates another
 event rather than updating an existing one. It is not an idempotent update.
 
@@ -34,8 +51,92 @@ On startup the backend creates the initial `event` table if missing, including
 database constraints for required fields, nonblank names, and date ordering.
 This also works with an existing PostgreSQL volume; no data reset is needed.
 Schema initialization errors fail application startup rather than being ignored.
-Future changes to an existing table will need migrations: `CREATE TABLE IF NOT
-EXISTS` does not upgrade an existing schema.
+Startup also adds the nullable address columns to existing tables using
+`ADD COLUMN IF NOT EXISTS`. Existing events are preserved with `null` address
+values; restarting is safe. Other future schema changes still need explicit
+migrations: `CREATE TABLE IF NOT EXISTS` alone does not upgrade an existing schema.
+
+## Printers
+
+Printers are stored in a `printer` table keyed by their full code. Startup seeds
+the 13 codes from
+[printer_code.py](https://github.com/groskopf/printerbox_pdf/blob/3da0c8d91cb90f33ceae31471f431d94958080fb/printer_code.py).
+Seeding is repeatable and preserves existing records and newly added printers.
+The live legacy API also includes `Pey3NazUi3_B`, which is absent from that source
+file and is not seeded here; it can be added through the API.
+
+- `PUT /api/v2/printer/` accepts
+  `{"code":"NEWPRINTER_13","description":"New flight case"}` and returns
+  `{"code":"NEWPRINTER_13","label":"13","description":"New flight case"}` with status 201.
+- `GET /api/v2/printer/{code}` returns one printer, or 404 if it does not exist.
+- `GET /api/v2/printer/` returns all printers sorted by code (or `[]`).
+
+The label is automatically derived from the suffix after `_`, including
+multi-digit labels such as `"10"`. Codes are case-sensitive alphanumeric strings
+with exactly one underscore separating a nonempty prefix and label. Creation
+trims surrounding whitespace. Invalid codes and extra request fields return 422;
+adding an existing code returns 409 without changing that record.
+Labels are strings; no client-supplied label is needed.
+
+New printers require a nonblank string `description`, trimmed on creation.
+All printer responses include it. Startup adds the nullable description column
+to older tables and fills missing descriptions for the seeded printers, without
+overwriting existing descriptions. Legacy custom printers without descriptions
+remain readable with `description: null`. The seeded virtual printer is described
+as "Virtual printer used to generate labels"; the others as
+"1st generation black flight case".
+
+The legacy API exposes codes as an enum used in booking routes but has no
+standalone printer CRUD endpoints. These new routes follow the current API's
+singular resource and PUT-creation conventions instead.
+
+## Label types
+
+Label types replace the legacy
+[NameTagType enum](https://github.com/groskopf/printerbox_pdf/blob/3da0c8d91cb90f33ceae31471f431d94958080fb/pdf/name_tag_type.py)
+with a database-backed `label_type` table. Startup seeds these two types, using
+the dimensions from the legacy PDF templates:
+
+| Code | Description | Height (mm) | Width (mm) | Mirrored |
+|------|-------------|-------------|------------|----------|
+| `4760100` | Name tag 60x100 mm | 60 | 100 | false |
+| `4786103` | Foldable name tag 86x103 mm | 86 | 103 | true |
+
+Height and width describe **one face**, before padding. `mirrored` means an
+upside-down duplicate for folding, not horizontally reflected text. Thus the
+foldable type has a one-face height of 86 mm, not its unfolded height of 172 mm.
+These are stored properties; PDF rendering is not implemented by these endpoints.
+
+- `PUT /api/v2/label_type/` creates a type and returns all its fields (201).
+- `GET /api/v2/label_type/{code}` returns one type, or 404 if absent.
+- `GET /api/v2/label_type/` returns all types sorted by code (or `[]`).
+
+Example creation body:
+
+```json
+{
+  "code": "1234567",
+  "description": "Custom foldable label",
+  "height": 86.5,
+  "width": 103,
+  "mirrored": true
+}
+```
+
+All five fields are required. Codes are case-sensitive digit-only strings
+(leading zeros are preserved); codes and descriptions are trimmed and cannot
+be blank. Dimensions must be finite, positive JSON numbers in millimetres,
+and `mirrored` must be a JSON boolean. Invalid input and extra fields return 422.
+Nonfinite numeric input is rejected with a JSON validation error; nonfinite
+values echoed in error details are represented as strings (`"nan"`, `"inf"`,
+or `"-inf"`) so the error response remains valid JSON.
+Duplicate codes return 409 without updating the existing type. Startup seeding
+is repeatable and never overwrites existing types, including customized seeds.
+No reset of existing database volumes is needed.
+
+The legacy API uses the enum in bookings and layout routes, but does not expose
+label-type management endpoints. These routes therefore follow the current
+singular-resource and PUT-creation conventions, keeping `/api/v2`.
 
 ## Configuration
 
@@ -65,6 +166,37 @@ server repo instead. It mounts `app/` into the backend and enables uvicorn reloa
 alongside hot reload for both React apps. Rebuild after changing dependencies.
 
 ## Develop
+
+### VS Code dev container
+
+Open this repository folder in VS Code, install the **Dev Containers** extension,
+and run **Dev Containers: Reopen in Container**. The configuration in
+[.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) provides
+Python 3.12 with a writable virtual environment, runtime dependencies and
+pytest/httpx, Python/Pylance extensions, Git, curl, OpenSSL, Docker
+CLI/Compose/Buildx, PostgreSQL client tools, jq, and ripgrep.
+No Node.js feature or frontend dependencies are installed.
+
+Dependencies install automatically from `pyproject.toml` in editable mode.
+After changing dependencies, run `python -m pip install -e '.[dev]'` again.
+Run `python -m pytest` from the container terminal. If VS Code retained a host
+interpreter selection, choose `/opt/onsite-print-venv/bin/python` with
+**Python: Select Interpreter**.
+
+The parent directory is mounted at its original absolute host path so sibling
+repositories and Compose bind mounts remain accessible. Keep the checkout in a
+dedicated parent directory: the container can access everything in that directory.
+Docker uses the host engine, granting control over host containers; use trusted
+code only. Setup does not start services, create secrets, or reset database data.
+Port 8000 is forwarded if you start uvicorn manually.
+
+Start the full stack from the server repository as above. From this container,
+the host gateway is `http://host.docker.internal:8080`; PostgreSQL published on
+the host is reachable at `host.docker.internal:5432`. Integration tests still
+require an explicitly configured **isolated test database**, not the development
+or production database.
+
+### Without a container
 
 ```sh
 python3 -m venv .venv
