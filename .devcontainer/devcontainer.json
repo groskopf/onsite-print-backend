@@ -1,7 +1,9 @@
 {
     "name": "Onsite Print Backend - Python",
     "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "../Dockerfile",
+        "context": "..",
+        "target": "development"
     },
     "features": {
         "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
@@ -14,25 +16,61 @@
     "workspaceMount": "source=${localWorkspaceFolder}/..,target=${localWorkspaceFolder}/..,type=bind",
     "workspaceFolder": "${localWorkspaceFolder}",
     "remoteUser": "vscode",
-    "runArgs": ["--add-host=host.docker.internal:host-gateway"],
+    "containerUser": "vscode",
+    "updateRemoteUserUID": true,
+    "initializeCommand": [
+        "mkdir",
+        "-p",
+        "${localEnv:HOME}/.copilot/session-state",
+        "${localEnv:HOME}/.config/Code/agentSessionData",
+        "${localEnv:HOME}/.config/gh"
+    ],
+    "mounts": [
+        "source=${localEnv:HOME}/.copilot/session-state,target=/home/vscode/.copilot/session-state,type=bind",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
+        "source=${localEnv:HOME}/.config/Code/agentSessionData,target=/home/vscode/.vscode-server/data/agentSessionData,type=bind"
+    ],
+    "runArgs": [
+        "--add-host=host.docker.internal:host-gateway"
+    ],
     "remoteEnv": {
         "VIRTUAL_ENV": "/opt/onsite-print-venv",
-        "PATH": "/opt/onsite-print-venv/bin:${containerEnv:PATH}"
+        "PATH": "/opt/onsite-print-venv/bin:${containerEnv:PATH}",
+        "GH_TOKEN": "${localEnv:GH_TOKEN}"
     },
-    "forwardPorts": [8000],
+    "forwardPorts": [
+        8000
+    ],
     "postCreateCommand": "/opt/onsite-print-venv/bin/python -m pip install --editable '.[dev]'",
     "customizations": {
         "vscode": {
             "extensions": [
+                "GitHub.copilot",
+                "GitHub.copilot-chat",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
+                "ms-python.black-formatter",
+                "ms-python.flake8",
+                "ms-python.isort",
                 "ms-azuretools.vscode-docker"
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/opt/onsite-print-venv/bin/python",
                 "python.testing.pytestEnabled": true,
                 "python.testing.unittestEnabled": false,
-                "python.testing.pytestArgs": ["tests"]
+                "python.testing.pytestArgs": [
+                    "tests"
+                ],
+                "black-formatter.importStrategy": "fromEnvironment",
+                "flake8.importStrategy": "fromEnvironment",
+                "isort.importStrategy": "fromEnvironment",
+                "[python]": {
+                    "editor.defaultFormatter": "ms-python.black-formatter",
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.organizeImports": "explicit"
+                    }
+                }
             }
         }
     }

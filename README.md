@@ -172,16 +172,26 @@ alongside hot reload for both React apps. Rebuild after changing dependencies.
 Open this repository folder in VS Code, install the **Dev Containers** extension,
 and run **Dev Containers: Reopen in Container**. The configuration in
 [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) provides
-Python 3.12 with a writable virtual environment, runtime dependencies and
-pytest/httpx, Python/Pylance extensions, Git, curl, OpenSSL, Docker
-CLI/Compose/Buildx, PostgreSQL client tools, jq, and ripgrep.
+the same Python 3.12 runtime and application dependencies as the production
+image, plus a writable virtual environment and the development tools Black,
+Flake8, isort, mypy, pre-commit, pytest/httpx, pytest-cov, and Ruff;
+Python/Pylance extensions, Git, GitHub CLI, curl, OpenSSH, Docker CLI/Compose/Buildx,
+PostgreSQL client tools, jq, and ripgrep.
 No Node.js feature or frontend dependencies are installed.
 
-Dependencies install automatically from `pyproject.toml` in editable mode.
+The shared `runtime` stage in [Dockerfile](Dockerfile) installs everything needed
+to run the application. The devcontainer builds its `development` stage and
+installs the `dev` optional dependency group from `pyproject.toml` in editable
+mode. The default final `production` stage contains no developer tools.
 After changing dependencies, run `python -m pip install -e '.[dev]'` again.
 Run `python -m pytest` from the container terminal. If VS Code retained a host
 interpreter selection, choose `/opt/onsite-print-venv/bin/python` with
 **Python: Select Interpreter**.
+Run `python -m black app tests` to format, `python -m flake8 app tests` to lint,
+`python -m isort app tests` to sort imports, and `python -m mypy app` for type
+checking. `python -m pytest --cov=app` collects test coverage. Saving a Python
+file in the devcontainer formats it with Black and organizes its imports with
+isort.
 
 The parent directory is mounted at its original absolute host path so sibling
 repositories and Compose bind mounts remain accessible. Keep the checkout in a
@@ -189,6 +199,38 @@ dedicated parent directory: the container can access everything in that director
 Docker uses the host engine, granting control over host containers; use trusted
 code only. Setup does not start services, create secrets, or reset database data.
 Port 8000 is forwarded if you start uvicorn manually.
+
+The container shares the host's `~/.copilot/session-state` and `~/.config/gh`
+directories at the same relative locations in the container user's home. The
+Dev Containers extension creates both host directories before starting the
+container. This makes Copilot session files and file-backed GitHub CLI
+authentication available without mounting the rest of the Copilot configuration.
+Both mounts are writable so updates made by Copilot or `gh` persist on the host.
+
+If `gh auth status` works on the host but not in the container, the host is
+probably storing its token in an OS keyring rather than `~/.config/gh/hosts.yml`.
+Export `GH_TOKEN` in the environment used to launch VS Code, then rebuild and
+reopen the container; the configuration forwards that variable. Alternatively,
+run `gh auth login --insecure-storage` on the host to put the token in the shared
+configuration, understanding that this stores it as plain text. Verify sharing
+inside the container with `gh auth status`.
+
+Only use this configuration with trusted code. Shared Copilot sessions can
+contain sensitive conversation content, and the GitHub configuration or
+forwarded `GH_TOKEN` grants the container the token's GitHub permissions.
+
+Both the container and VS Code processes run as `vscode`, with
+`updateRemoteUserUID` enabled to match your host UID/GID on Linux. Normal tools
+therefore create host-owned files, not root-owned files; avoid `sudo` for editing,
+package installation into the virtual environment, or Copilot commands.
+After changing this configuration, select **Dev Containers: Rebuild and Reopen
+in Container**. Check `id` in the container terminal against `id` on the host.
+Sharing the Copilot files does not transfer a running chat, provide Copilot
+authentication, or guarantee that every VS Code chat provider can discover the
+session. GitHub CLI authentication is shared separately as described above. Use
+the provider's session-history/resume UI inside the container if supported, and
+do not run the same resumed session simultaneously on the host and in a
+container.
 
 Start the full stack from the server repository as above. From this container,
 the host gateway is `http://host.docker.internal:8080`; PostgreSQL published on
