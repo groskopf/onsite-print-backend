@@ -10,7 +10,8 @@ from psycopg import AsyncConnection
 
 from app.db import create_pool, get_connection, initialize_schema
 from app.events import router as events_router
-from app.label_types import router as label_types_router
+from app.layouts import router as layouts_router
+from app.nametag_types import router as nametag_types_router
 from app.printers import router as printers_router
 
 API_PREFIX = "/api/v2"
@@ -59,4 +60,5 @@ async def health(connection: Annotated[AsyncConnection, Depends(get_connection)]
 app.include_router(api)
 app.include_router(events_router, prefix=API_PREFIX)
 app.include_router(printers_router, prefix=API_PREFIX)
-app.include_router(label_types_router, prefix=API_PREFIX)
+app.include_router(nametag_types_router, prefix=API_PREFIX)
+app.include_router(layouts_router, prefix=API_PREFIX)

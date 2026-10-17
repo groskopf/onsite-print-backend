@@ -90,26 +90,26 @@ The legacy API exposes codes as an enum used in booking routes but has no
 standalone printer CRUD endpoints. These new routes follow the current API's
 singular resource and PUT-creation conventions instead.
 
-## Label types
+## Nametag types
 
-Label types replace the legacy
+Nametag types replace the legacy
 [NameTagType enum](https://github.com/groskopf/printerbox_pdf/blob/3da0c8d91cb90f33ceae31471f431d94958080fb/pdf/name_tag_type.py)
-with a database-backed `label_type` table. Startup seeds these two types, using
+with a database-backed `nametag_type` table. Startup seeds these two types, using
 the dimensions from the legacy PDF templates:
 
-| Code | Description | Height (mm) | Width (mm) | Mirrored |
+| Code | Description | Height (mm) | Width (mm) | Folded |
 |------|-------------|-------------|------------|----------|
 | `4760100` | Name tag 60x100 mm | 60 | 100 | false |
 | `4786103` | Foldable name tag 86x103 mm | 86 | 103 | true |
 
-Height and width describe **one face**, before padding. `mirrored` means an
+Height and width describe **one face**, before padding. `folded` means an
 upside-down duplicate for folding, not horizontally reflected text. Thus the
 foldable type has a one-face height of 86 mm, not its unfolded height of 172 mm.
 These are stored properties; PDF rendering is not implemented by these endpoints.
 
-- `PUT /api/v2/label_type/` creates a type and returns all its fields (201).
-- `GET /api/v2/label_type/{code}` returns one type, or 404 if absent.
-- `GET /api/v2/label_type/` returns all types sorted by code (or `[]`).
+- `PUT /api/v2/nametag_type/` creates a type and returns all its fields (201).
+- `GET /api/v2/nametag_type/{code}` returns one type, or 404 if absent.
+- `GET /api/v2/nametag_type/` returns all types sorted by code (or `[]`).
 
 Example creation body:
 
@@ -119,24 +119,59 @@ Example creation body:
   "description": "Custom foldable label",
   "height": 86.5,
   "width": 103,
-  "mirrored": true
+  "folded": true
 }
 ```
 
 All five fields are required. Codes are case-sensitive digit-only strings
 (leading zeros are preserved); codes and descriptions are trimmed and cannot
 be blank. Dimensions must be finite, positive JSON numbers in millimetres,
-and `mirrored` must be a JSON boolean. Invalid input and extra fields return 422.
+and `folded` must be a JSON boolean. Invalid input and extra fields return 422.
 Nonfinite numeric input is rejected with a JSON validation error; nonfinite
 values echoed in error details are represented as strings (`"nan"`, `"inf"`,
 or `"-inf"`) so the error response remains valid JSON.
 Duplicate codes return 409 without updating the existing type. Startup seeding
 is repeatable and never overwrites existing types, including customized seeds.
 No reset of existing database volumes is needed.
+Startup renames an existing `label_type` table to `nametag_type`, preserving its
+records. If both tables exist, startup fails rather than choosing one silently.
+The old `/api/v2/label_type/` endpoints are replaced, not retained as aliases.
+Startup also renames the old `mirrored` column to `folded`, preserving its boolean
+values. API requests and responses use only `folded`; `mirrored` is no longer
+accepted.
 
 The legacy API uses the enum in bookings and layout routes, but does not expose
-label-type management endpoints. These routes therefore follow the current
+nametag-type management endpoints. These routes therefore follow the current
 singular-resource and PUT-creation conventions, keeping `/api/v2`.
+
+## Layouts
+
+Layouts are shared between sheets and nametags, so there is one catalogue:
+
+- `GET /api/v2/layout/` returns layout names as a JSON array, for example
+  `["layout_1", "layout_2", "layout_2PT", ...]`.
+- `GET /api/v2/nametag_type/{code}/layouts` returns the supported layout names
+  for that type in the same order. Unknown types return 404; an existing type
+  without assignments returns `[]`. Invalid type codes return 422.
+
+The `layout` table stores each unique name, its ordering position, and its Danish
+description. Startup adds the nullable `description` column to existing tables
+and fills missing descriptions for seeded layouts without overwriting saved
+descriptions. Older custom layouts may retain a null description; non-null
+descriptions cannot be blank. The GET endpoints still return layout names only.
+`nametag_type_layout` associates types with layouts using foreign keys and
+prevents duplicate assignments. Startup seeds the 35 valid names from the legacy
+[Layout enum](https://github.com/groskopf/printerbox_pdf/blob/main/pdf/layouts.py),
+excluding its `invalid` sentinel. Both seeded nametag types support all 35,
+matching [name_tag_layouts.py](https://github.com/groskopf/printerbox_pdf/blob/main/pdf/name_tag_layouts.py).
+Seeding adds missing reference entries without overwriting existing entries or
+custom assignments. Newly created nametag types have no assignments by default.
+
+These are GET-only reference endpoints, not layout editing or PDF rendering.
+Unlike the legacy API's separate `/layouts/name_tags` and `/layouts/sheets`
+type-grouped lists, the catalogue is shared and type-specific support is exposed
+under the nametag type. No sheet-type table or sheet-specific associations are
+introduced yet; the legacy sheet mappings currently allow only `layout_1`.
 
 ## Configuration
 

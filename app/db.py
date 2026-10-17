@@ -60,14 +60,56 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
                 CHECK (length(trim(description)) > 0)
         """)
         await connection.execute("""
-            CREATE TABLE IF NOT EXISTS label_type (
+            DO $$
+            BEGIN
+                IF to_regclass('label_type') IS NOT NULL THEN
+                    IF to_regclass('nametag_type') IS NOT NULL THEN
+                        RAISE EXCEPTION 'Both label_type and nametag_type exist; resolve before startup';
+                    END IF;
+                    ALTER TABLE label_type RENAME TO nametag_type;
+                END IF;
+            END
+            $$
+        """)
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS nametag_type (
                 code TEXT PRIMARY KEY CHECK (code ~ '^[0-9]+$'),
                 description TEXT NOT NULL CHECK (length(trim(description)) > 0),
                 height DOUBLE PRECISION NOT NULL
                     CHECK (height > 0 AND height < 'Infinity'::double precision),
                 width DOUBLE PRECISION NOT NULL
                     CHECK (width > 0 AND width < 'Infinity'::double precision),
-                mirrored BOOLEAN NOT NULL
+                folded BOOLEAN NOT NULL
+            )
+        """)
+        await connection.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_attribute
+                    WHERE attrelid = 'nametag_type'::regclass
+                      AND attname = 'mirrored' AND NOT attisdropped
+                ) THEN
+                    ALTER TABLE nametag_type RENAME COLUMN mirrored TO folded;
+                END IF;
+            END
+            $$
+        """)
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS layout (
+                name TEXT PRIMARY KEY CHECK (length(trim(name)) > 0),
+                position INTEGER NOT NULL CHECK (position >= 0)
+            )
+        """)
+        await connection.execute("""
+            ALTER TABLE layout ADD COLUMN IF NOT EXISTS description TEXT
+                CHECK (length(trim(description)) > 0)
+        """)
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS nametag_type_layout (
+                nametag_type_code TEXT NOT NULL REFERENCES nametag_type(code),
+                layout_name TEXT NOT NULL REFERENCES layout(name),
+                PRIMARY KEY (nametag_type_code, layout_name)
             )
         """)
         async with connection.cursor() as cursor:
@@ -85,11 +127,35 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
             )
             await cursor.executemany(
                 """
-                INSERT INTO label_type (code, description, height, width, mirrored)
+                INSERT INTO nametag_type (code, description, height, width, folded)
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (code) DO NOTHING
                 """,
-                INITIAL_LABEL_TYPES,
+                INITIAL_NAMETAG_TYPES,
+            )
+            await cursor.executemany(
+                """
+                INSERT INTO layout (name, position, description) VALUES (%s, %s, %s)
+                ON CONFLICT (name) DO UPDATE
+                SET description = EXCLUDED.description
+                WHERE layout.description IS NULL
+                """,
+                [
+                    (name, position, description)
+                    for position, (name, description) in enumerate(INITIAL_LAYOUTS)
+                ],
+            )
+            await cursor.executemany(
+                """
+                INSERT INTO nametag_type_layout (nametag_type_code, layout_name)
+                VALUES (%s, %s)
+                ON CONFLICT (nametag_type_code, layout_name) DO NOTHING
+                """,
+                [
+                    (code, name)
+                    for code, *_ in INITIAL_NAMETAG_TYPES
+                    for name, _ in INITIAL_LAYOUTS
+                ],
             )
 
 
