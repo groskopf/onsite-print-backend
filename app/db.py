@@ -22,9 +22,47 @@ INITIAL_PRINTER_CODES = (
     ("MXSI42S9W0_12", "1st generation black flight case"),
 )
 
-INITIAL_LABEL_TYPES = (
+INITIAL_NAMETAG_TYPES = (
     ("4786103", "Foldable name tag 86x103 mm", 86, 103, True),
     ("4760100", "Name tag 60x100 mm", 60, 100, False),
+)
+
+INITIAL_LAYOUTS = (
+    ("layout_1", "En linie"),
+    ("layout_2", "To liner"),
+    ("layout_2PT", "To lininer billede i toppen"),
+    ("layout_2PB", "To lininer billede i bunden"),
+    ("layout_2PTL", "To lininer billede i toppen til venstre"),
+    ("layout_2PTR", "To lininer billede i toppen til højre"),
+    ("layout_2PBL", "To lininer billede i bunden til venstre"),
+    ("layout_2PBR", "To lininer billede i bunden til højre"),
+    ("layout_2QT", "To lininer QR code i toppen"),
+    ("layout_2QB", "To lininer QR code i bunden"),
+    ("layout_2QTL", "To lininer QR i toppen til venstre"),
+    ("layout_2QTR", "To lininer QR i toppen til højre"),
+    ("layout_2QBL", "To lininer QR i bunden til venstre"),
+    ("layout_2QBR", "To lininer QR i bunden til højre"),
+    ("layout_2PTLQ", "To lininer billede i toppen til venstre med QR"),
+    ("layout_2PTRQ", "To lininer billede i toppen til højre med QR"),
+    ("layout_2PBLQ", "To lininer billede i bunden til venstre med QR"),
+    ("layout_2PBRQ", "To lininer billede i bunden til højre med QR"),
+    ("layout_3", "Tre linier"),
+    ("layout_3PT", "Tre linier med billede i toppen"),
+    ("layout_3PB", "Tre linier med billede i bunden"),
+    ("layout_3PTL", "Tre linier med billede i toppen til venstre"),
+    ("layout_3PTR", "Tre linier med billede i toppen til højre"),
+    ("layout_3PBL", "Tre linier med billede i bunden til venstre"),
+    ("layout_3PBR", "Tre linier med billede i bunden til højre"),
+    ("layout_3PTLQ", "Tre linier med billede i toppen til venstre med QR"),
+    ("layout_3PTRQ", "Tre linier med billede i toppen til højre med QR"),
+    ("layout_3PBLQ", "Tre linier med billede i bunden til venstre med QR"),
+    ("layout_3PBRQ", "Tre linier med billede i bunden til højre med QR"),
+    ("layout_3QT", "Tre linier med QR i toppen"),
+    ("layout_3QB", "Tre linier med QR i bunden"),
+    ("layout_3QTL", "Tre linier med QR i toppen til venstre"),
+    ("layout_3QTR", "Tre linier med QR i toppen til højre"),
+    ("layout_3QBL", "Tre linier med QR i bunden til venstre"),
+    ("layout_3QBR", "Tre linier med QR i bunden til højre"),
 )
 
 
