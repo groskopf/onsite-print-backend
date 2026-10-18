@@ -20,19 +20,22 @@ All routes live under `/api/v2`, so the same URLs work directly and through the
 nginx web server, which forwards `/api/` to `backend:8000`:
 
 - `GET /api/v2/health` – checks the database connection
-- `PUT /api/v2/event/` – creates an event and returns it with its generated ID (201)
-- `GET /api/v2/event/` – returns all events, ordered by ID (an empty database returns `[]`)
+- `POST /api/v2/events/` – creates an event and returns it with its generated ID and code (201)
+- `GET /api/v2/events/` – returns all events, ordered by ID (an empty database returns `[]`)
+- `GET /api/v2/events/{event_code}` – returns one event
+- `PUT /api/v2/events/{event_code}` – replaces an event's fields and returns it
+- `DELETE /api/v2/events/{event_code}` – deletes an event **and all its bookings**, returning the deleted event
 - `/api/v2/docs` – interactive OpenAPI documentation
 - `/api/v2/openapi.json` – OpenAPI schema
 
 ## Events
 
 ```sh
-curl -X PUT http://localhost:8080/api/v2/event/ \
+curl -X POST http://localhost:8080/api/v2/events/ \
   -H 'Content-Type: application/json' \
   -d '{"name":"Print conference","start_date":"2026-10-09","end_date":"2026-10-10"}'
 
-curl http://localhost:8080/api/v2/event/
+curl http://localhost:8080/api/v2/events/
 ```
 
 Dates are calendar dates (`YYYY-MM-DD`), without times or timezones. All three
@@ -57,8 +60,26 @@ Create and list responses include all four fields, with `null` for missing value
 }
 ```
 
-As requested, PUT creates a new row on each call; repeating it creates another
-event rather than updating an existing one. It is not an idempotent update.
+POST creates a new row on each call; repeating it creates another
+event rather than updating an existing one.
+
+Each event also gets a server-generated `code`: 16 uppercase base32 characters
+(`A`–`Z`, `2`–`7`), the same format as booking codes. Clients cannot supply it.
+Bookings reference their event through this code as `event_code`.
+
+`GET`, `PUT`, and `DELETE` on `/api/v2/events/{event_code}` work with a single
+event. PUT takes the same body as POST and replaces every field; omitted
+address fields become `null`. The `id` and `code` never change. DELETE also
+deletes every booking for the event. An unknown code returns 404; a malformed
+code returns 422.
+
+```sh
+curl -X PUT http://localhost:8080/api/v2/events/ABCDEFGHIJKLMNOP \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Print conference","start_date":"2026-10-09","end_date":"2026-10-11"}'
+
+curl -X DELETE http://localhost:8080/api/v2/events/ABCDEFGHIJKLMNOP
+```
 
 On startup the backend creates the initial `event` table if missing, including
 database constraints for required fields, nonblank names, and date ordering.
@@ -71,18 +92,28 @@ migrations: `CREATE TABLE IF NOT EXISTS` alone does not upgrade an existing sche
 
 ## Printers
 
-Printers are stored in a `printer` table keyed by their full code. Startup seeds
-the 13 codes from
+Printers are stored in a `printer` table keyed by their full code. When the
+table is empty, startup seeds the 13 default codes from
 [printer_code.py](https://github.com/groskopf/printerbox_pdf/blob/3da0c8d91cb90f33ceae31471f431d94958080fb/printer_code.py).
-Seeding is repeatable and preserves existing records and newly added printers.
-The live legacy API also includes `Pey3NazUi3_B`, which is absent from that source
-file and is not seeded here; it can be added through the API.
+Once the table has any printer, startup never adds printers again, so deleted
+default printers stay deleted. (Deleting every printer brings the defaults back
+at the next restart.) The live legacy API also includes `Pey3NazUi3_B`, which is
+absent from that source file and is not seeded here; it can be added through the API.
 
-- `PUT /api/v2/printer/` accepts
+- `POST /api/v2/printers/` accepts
   `{"code":"NEWPRINTER_13","description":"New flight case"}` and returns
   `{"code":"NEWPRINTER_13","label":"13","description":"New flight case"}` with status 201.
-- `GET /api/v2/printer/{code}` returns one printer, or 404 if it does not exist.
-- `GET /api/v2/printer/` returns all printers sorted by code (or `[]`).
+- `GET /api/v2/printers/{code}` returns one printer, or 404 if it does not exist.
+- `GET /api/v2/printers/` returns all printers sorted by code (or `[]`).
+- `PUT /api/v2/printers/{code}` accepts `{"description":"Updated text"}` and returns
+  the updated printer. Only the description can change: the code is the key that
+  bookings refer to, and the label is derived from it. Sending `code` or `label`
+  returns 422.
+- `DELETE /api/v2/printers/{code}` deletes a printer and returns it. If any
+  booking (past or future) uses the printer, it returns 409
+  `"Printer has bookings"` and nothing is deleted.
+
+Unknown printers return 404 for GET, PUT, and DELETE; malformed codes return 422.
 
 The label is automatically derived from the suffix after `_`, including
 multi-digit labels such as `"10"`. Codes are case-sensitive alphanumeric strings
@@ -93,22 +124,24 @@ Labels are strings; no client-supplied label is needed.
 
 New printers require a nonblank string `description`, trimmed on creation.
 All printer responses include it. Startup adds the nullable description column
-to older tables and fills missing descriptions for the seeded printers, without
-overwriting existing descriptions. Legacy custom printers without descriptions
+to older tables and fills missing descriptions for the default printer codes
+that exist, without overwriting existing descriptions. Legacy custom printers without descriptions
 remain readable with `description: null`. The seeded virtual printer is described
 as "Virtual printer used to generate labels"; the others as
 "1st generation black flight case".
 
 The legacy API exposes codes as an enum used in booking routes but has no
 standalone printer CRUD endpoints. These new routes follow the current API's
-singular resource and PUT-creation conventions instead.
+plural-resource, POST-creation, and PUT-update conventions instead.
 
 ## Nametag types
 
 Nametag types replace the legacy
 [NameTagType enum](https://github.com/groskopf/printerbox_pdf/blob/3da0c8d91cb90f33ceae31471f431d94958080fb/pdf/name_tag_type.py)
-with a database-backed `nametag_type` table. Startup seeds these two types, using
-the dimensions from the legacy PDF templates:
+with a database-backed `nametag_type` table. The types are a **static list defined
+in code** ([db.py](app/db.py)), because they will be bound to the nametag
+generation code. The API is read-only: there is no POST, PUT, or DELETE. The two
+types use the dimensions from the legacy PDF templates:
 
 | Code | Description | Height (mm) | Width (mm) | Folded |
 |------|-------------|-------------|------------|----------|
@@ -120,32 +153,15 @@ upside-down duplicate for folding, not horizontally reflected text. Thus the
 foldable type has a one-face height of 86 mm, not its unfolded height of 172 mm.
 These are stored properties; PDF rendering is not implemented by these endpoints.
 
-- `PUT /api/v2/nametag_type/` creates a type and returns all its fields (201).
-- `GET /api/v2/nametag_type/{code}` returns one type, or 404 if absent.
-- `GET /api/v2/nametag_type/` returns all types sorted by code (or `[]`).
+- `GET /api/v2/nametag_types/{code}` returns one type, or 404 if absent.
+- `GET /api/v2/nametag_types/` returns all types sorted by code (or `[]`).
 
-Example creation body:
-
-```json
-{
-  "code": "1234567",
-  "description": "Custom foldable label",
-  "height": 86.5,
-  "width": 103,
-  "folded": true
-}
-```
-
-All five fields are required. Codes are case-sensitive digit-only strings
-(leading zeros are preserved); codes and descriptions are trimmed and cannot
-be blank. Dimensions must be finite, positive JSON numbers in millimetres,
-and `folded` must be a JSON boolean. Invalid input and extra fields return 422.
-Nonfinite numeric input is rejected with a JSON validation error; nonfinite
-values echoed in error details are represented as strings (`"nan"`, `"inf"`,
-or `"-inf"`) so the error response remains valid JSON.
-Duplicate codes return 409 without updating the existing type. Startup seeding
-is repeatable and never overwrites existing types, including customized seeds.
-No reset of existing database volumes is needed.
+Codes are digit-only strings (leading zeros are preserved). Every startup writes
+the list from code into the table, overwriting any changed description,
+dimensions, or `folded` value, so the code is the single source of truth. To add
+or change a type, edit `INITIAL_NAMETAG_TYPES` and restart. Types created by the
+removed `POST /api/v2/nametag_types/` endpoint are not deleted automatically,
+because bookings may reference them.
 Startup renames an existing `label_type` table to `nametag_type`, preserving its
 records. If both tables exist, startup fails rather than choosing one silently.
 The old `/api/v2/label_type/` endpoints are replaced, not retained as aliases.
@@ -153,17 +169,16 @@ Startup also renames the old `mirrored` column to `folded`, preserving its boole
 values. API requests and responses use only `folded`; `mirrored` is no longer
 accepted.
 
-The legacy API uses the enum in bookings and layout routes, but does not expose
-nametag-type management endpoints. These routes therefore follow the current
-singular-resource and PUT-creation conventions, keeping `/api/v2`.
+The legacy API uses a fixed enum in bookings and layout routes and does not
+expose nametag-type management endpoints; the read-only list matches that.
 
 ## Layouts
 
 Layouts are shared between sheets and nametags, so there is one catalogue:
 
-- `GET /api/v2/layout/` returns layout names as a JSON array, for example
+- `GET /api/v2/layouts/` returns layout names as a JSON array, for example
   `["layout_1", "layout_2", "layout_2PT", ...]`.
-- `GET /api/v2/nametag_type/{code}/layouts` returns the supported layout names
+- `GET /api/v2/nametag_types/{code}/layouts` returns the supported layout names
   for that type in the same order. Unknown types return 404; an existing type
   without assignments returns `[]`. Invalid type codes return 422.
 
@@ -178,7 +193,7 @@ prevents duplicate assignments. Startup seeds the 35 valid names from the legacy
 excluding its `invalid` sentinel. Both seeded nametag types support all 35,
 matching [name_tag_layouts.py](https://github.com/groskopf/printerbox_pdf/blob/main/pdf/name_tag_layouts.py).
 Seeding adds missing reference entries without overwriting existing entries or
-custom assignments. Newly created nametag types have no assignments by default.
+custom assignments. A nametag type not in the static list has no assignments by default.
 
 These are GET-only reference endpoints, not layout editing or PDF rendering.
 Unlike the legacy API's separate `/layouts/name_tags` and `/layouts/sheets`
