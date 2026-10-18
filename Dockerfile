@@ -9,6 +9,9 @@ COPY pyproject.toml ./
 COPY app ./app
 RUN python -m pip install --no-cache-dir .
 
+ENV NAMETAGS_DIR=/var/lib/onsite-print/nametags
+RUN mkdir -p "${NAMETAGS_DIR}" && chown nobody:nogroup "${NAMETAGS_DIR}"
+
 FROM runtime AS development
 
 RUN apt-get update \
@@ -29,7 +32,7 @@ RUN apt-get update \
     && chmod 0440 /etc/sudoers.d/vscode \
     && mkdir -p /home/vscode/.vscode-server/data \
     && chown -R vscode:vscode /home/vscode/.vscode-server \
-    && chown -R vscode:vscode "${VIRTUAL_ENV}"
+    && chown -R vscode:vscode "${VIRTUAL_ENV}" "${NAMETAGS_DIR}"
 
 USER vscode
 

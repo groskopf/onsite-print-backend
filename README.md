@@ -186,6 +186,36 @@ type-grouped lists, the catalogue is shared and type-specific support is exposed
 under the nametag type. No sheet-type table or sheet-specific associations are
 introduced yet; the legacy sheet mappings currently allow only `layout_1`.
 
+## Nametags
+
+Generated nametags are PDF files on disk, not database records. Each booking has
+its own directory, `$NAMETAGS_DIR/{booking_code}/`.
+
+- `POST /api/v2/nametags/{booking_code}` generates one nametag for the booking's
+  nametag type and returns `201` with `{"filename": "<type>_<layout>_<uuid>.pdf"}`.
+  The JSON body has `layout` and `line_1` (required) plus optional `line_2` to
+  `line_5`, `image_name`, and `qr_code`; unknown fields return 422.
+  Unknown bookings return 404. A booking that is not active today returns 400
+  `Booking not valid today`. A layout that the nametag type does not support
+  returns 400 `Name tag layout not supported`. Until the renderer in
+  [app/nametag_pdf.py](app/nametag_pdf.py) is implemented, this returns 501.
+- `GET /api/v2/nametags/{booking_code}` lists `[{"filename": ...}]`, oldest
+  first. A booking without files returns `[]`.
+- `DELETE /api/v2/nametags/{booking_code}` deletes all of the booking's files
+  and returns the deleted list.
+- `GET /api/v2/nametags/{booking_code}/{filename}` downloads one PDF
+  (`application/pdf`). `DELETE` on the same path removes it and returns
+  `{"filename": ...}`. Missing files return 404 `Nametag not found`.
+
+Booking codes and filenames are validated (`<letters/digits/_/->.pdf`), so paths
+cannot leave the booking directory; invalid values return 422.
+
+Compared with the legacy `/name_tags` API: the path is `/nametags`, `layout`
+moves from the query string into the body, and responses return the bare
+filename rather than a relative path. There is no image-existence check or
+printer-queue push yet. List and download read the filesystem only and do not
+look up the booking.
+
 ## Configuration
 
 | Variable           | Default                          |
@@ -195,9 +225,11 @@ introduced yet; the legacy sheet mappings currently allow only `layout_1`.
 | `DB_NAME`          | `onsite_print`                   |
 | `DB_USER`          | `onsite_print`                   |
 | `DB_PASSWORD_FILE` | `/run/secrets/postgres_password` |
+| `NAMETAGS_DIR`     | `/var/lib/onsite-print/nametags` |
 
 In Compose the password is the `postgres_password` secret, read from
-`../onsite-print-database/secrets/postgres_password`.
+`../onsite-print-database/secrets/postgres_password`. Generated nametags are kept
+in the `nametags` named volume mounted at `NAMETAGS_DIR`.
 
 ## Run
 

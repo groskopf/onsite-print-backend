@@ -8,6 +8,9 @@ services:
       DB_NAME: onsite_print
       DB_USER: onsite_print
       DB_PASSWORD_FILE: /run/secrets/postgres_password
+      NAMETAGS_DIR: /var/lib/onsite-print/nametags
+    volumes:
+      - nametags:/var/lib/onsite-print/nametags
     secrets:
       - postgres_password
     depends_on:
@@ -15,6 +18,9 @@ services:
         condition: service_healthy
         required: false
     restart: unless-stopped
+
+volumes:
+  nametags:
 
 secrets:
   postgres_password:

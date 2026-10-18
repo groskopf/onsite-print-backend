@@ -11,3 +11,7 @@ def database_url() -> str:
         f"user={os.environ.get('DB_USER', 'onsite_print')} "
         f"password={password}"
     )
+
+
+def nametags_dir() -> Path:
+    return Path(os.environ.get("NAMETAGS_DIR", "/var/lib/onsite-print/nametags"))
