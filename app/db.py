@@ -89,6 +89,17 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
                 ADD COLUMN IF NOT EXISTS country TEXT CHECK (length(trim(country)) > 0)
         """)
         await connection.execute("""
+            ALTER TABLE event ADD COLUMN IF NOT EXISTS code TEXT UNIQUE CHECK (code ~ '^[A-Z2-7]{16}$')
+        """)
+        async with connection.cursor() as cursor:
+            await cursor.execute("SELECT id FROM event WHERE code IS NULL")
+            event_ids = [event_id for (event_id,) in await cursor.fetchall()]
+            await cursor.executemany(
+                "UPDATE event SET code = %s WHERE id = %s",
+                [(generate_code(), event_id) for event_id in event_ids],
+            )
+        await connection.execute("ALTER TABLE event ALTER COLUMN code SET NOT NULL")
+        await connection.execute("""
             CREATE TABLE IF NOT EXISTS printer (
                 code TEXT PRIMARY KEY CHECK (code ~ '^[A-Za-z0-9]+_[A-Za-z0-9]+$'),
                 label TEXT NOT NULL CHECK (label = split_part(code, '_', 2))
