@@ -16,10 +16,16 @@ class NametagType(BaseModel):
     code: str = Field(pattern=r"^[0-9]+$")
     description: str = Field(min_length=1)
     height: float = Field(
-        gt=0, allow_inf_nan=False, strict=True, description="One-face height in millimetres",
+        gt=0,
+        allow_inf_nan=False,
+        strict=True,
+        description="One-face height in millimetres",
     )
     width: float = Field(
-        gt=0, allow_inf_nan=False, strict=True, description="One-face width in millimetres",
+        gt=0,
+        allow_inf_nan=False,
+        strict=True,
+        description="One-face width in millimetres",
     )
     folded: StrictBool = Field(
         description="Repeat the face upside down for folding, not a horizontal reflection",
@@ -40,8 +46,11 @@ async def create_nametag_type(nametag_type: NametagType, connection: Connection)
             RETURNING code, description, height, width, folded
             """,
             (
-                nametag_type.code, nametag_type.description,
-                nametag_type.height, nametag_type.width, nametag_type.folded,
+                nametag_type.code,
+                nametag_type.description,
+                nametag_type.height,
+                nametag_type.width,
+                nametag_type.folded,
             ),
         )
         row = await cursor.fetchone()

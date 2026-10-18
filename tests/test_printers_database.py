@@ -30,8 +30,7 @@ EXPECTED_PRINTERS = [
 ]
 for printer in EXPECTED_PRINTERS:
     printer["description"] = (
-        "Virtual printer used to generate labels" if printer["label"] == "A"
-        else "1st generation black flight case"
+        "Virtual printer used to generate labels" if printer["label"] == "A" else "1st generation black flight case"
     )
 
 
@@ -51,9 +50,12 @@ def test_seed_create_lookup_and_restart(monkeypatch):
                 INSERT INTO {}.printer (code, label) VALUES ('ALGCSOIO9O_A', 'A')
             """).format(sql.Identifier(schema)))
             monkeypatch.setattr(
-                main, "create_pool",
+                main,
+                "create_pool",
                 lambda: AsyncConnectionPool(
-                    conninfo, open=False, kwargs={"options": f"-c search_path={schema}"},
+                    conninfo,
+                    open=False,
+                    kwargs={"options": f"-c search_path={schema}"},
                 ),
             )
             expected = sorted(EXPECTED_PRINTERS, key=lambda printer: printer["code"])
@@ -64,15 +66,21 @@ def test_seed_create_lookup_and_restart(monkeypatch):
                     assert response.status_code == 200
                     assert response.json() == printer
                 new_printer = {
-                    "code": "NEWPRINTER_13", "label": "13", "description": "New flight case",
+                    "code": "NEWPRINTER_13",
+                    "label": "13",
+                    "description": "New flight case",
                 }
                 payload = {"code": new_printer["code"], "description": new_printer["description"]}
                 response = client.put("/api/v2/printer/", json=payload)
                 assert response.status_code == 201
                 assert response.json() == new_printer
-                assert client.put(
-                    "/api/v2/printer/", json=payload,
-                ).status_code == 409
+                assert (
+                    client.put(
+                        "/api/v2/printer/",
+                        json=payload,
+                    ).status_code
+                    == 409
+                )
                 assert client.get("/api/v2/printer/UNKNOWN_1").status_code == 404
                 assert client.get("/api/v2/printer/").status_code == 200
             connection.execute(sql.SQL("""
@@ -80,15 +88,15 @@ def test_seed_create_lookup_and_restart(monkeypatch):
                 WHERE code = 'ALGCSOIO9O_A'
             """).format(sql.Identifier(schema)))
             expected = [
-                {**printer, "description": "Updated virtual printer"}
-                if printer["code"] == "ALGCSOIO9O_A" else printer
+                {**printer, "description": "Updated virtual printer"} if printer["code"] == "ALGCSOIO9O_A" else printer
                 for printer in expected
             ]
             with TestClient(main.app) as client:
                 response = client.get("/api/v2/printer/")
                 assert response.status_code == 200
                 assert response.json() == sorted(
-                    expected + [new_printer], key=lambda printer: printer["code"],
+                    expected + [new_printer],
+                    key=lambda printer: printer["code"],
                 )
                 paths = client.get("/api/v2/openapi.json").json()["paths"]
                 assert {"get", "put"} <= paths["/api/v2/printer/"].keys()
