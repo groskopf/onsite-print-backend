@@ -1,4 +1,5 @@
 import os
+import re
 from uuid import uuid4
 
 import pytest
@@ -7,6 +8,7 @@ from psycopg import connect, sql
 from psycopg_pool import AsyncConnectionPool
 
 from app import main
+from app.codes import CODE_PATTERN
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("TEST_DATABASE_CONNINFO"),

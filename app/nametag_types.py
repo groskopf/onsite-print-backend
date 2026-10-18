@@ -1,13 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.db import get_connection
 
-router = APIRouter(prefix="/nametag_type", tags=["nametag types"])
+router = APIRouter(prefix="/nametag_types", tags=["nametag types"])
 
 
 class NametagType(BaseModel):

@@ -1,14 +1,15 @@
 from datetime import date
 from typing import Annotated, Self
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.codes import CODE_PATTERN, generate_code
 from app.db import get_connection
 
-router = APIRouter(prefix="/event", tags=["events"])
+router = APIRouter(prefix="/events", tags=["events"])
 
 
 class EventCreate(BaseModel):

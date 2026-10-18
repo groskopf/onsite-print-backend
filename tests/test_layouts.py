@@ -43,7 +43,7 @@ def layout_client():
 
 def test_list_layouts(layout_client):
     client, cursor = layout_client
-    response = client.get("/api/v2/layout/")
+    response = client.get("/api/v2/layouts/")
     assert response.status_code == 200
     assert response.json() == ["layout_1", "layout_2PT"]
     assert "ORDER BY position, name" in cursor.query
@@ -52,7 +52,7 @@ def test_list_layouts(layout_client):
 def test_empty_layout_catalogue(layout_client):
     client, cursor = layout_client
     cursor.rows = []
-    response = client.get("/api/v2/layout/")
+    response = client.get("/api/v2/layouts/")
     assert response.status_code == 200
     assert response.json() == []
 
@@ -65,4 +65,4 @@ def test_database_failure_is_not_hidden(layout_client):
 
     cursor.execute = fail
     with pytest.raises(RuntimeError, match="Database unavailable"):
-        client.get("/api/v2/layout/")
+        client.get("/api/v2/layouts/")

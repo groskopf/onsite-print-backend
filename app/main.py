@@ -8,10 +8,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 
+from app.bookings import router as bookings_router
 from app.db import create_pool, get_connection, initialize_schema
 from app.events import router as events_router
 from app.layouts import router as layouts_router
 from app.nametag_types import router as nametag_types_router
+from app.nametags import router as nametags_router
 from app.printers import router as printers_router
 
 API_PREFIX = "/api/v2"

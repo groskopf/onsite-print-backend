@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db import get_connection
 
-router = APIRouter(prefix="/printer", tags=["printers"])
+router = APIRouter(prefix="/printers", tags=["printers"])
 
 
 class Printer(BaseModel):

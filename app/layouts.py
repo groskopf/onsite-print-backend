@@ -6,7 +6,7 @@ from psycopg.rows import dict_row
 
 from app.db import get_connection
 
-router = APIRouter(prefix="/layout", tags=["layouts"])
+router = APIRouter(prefix="/layouts", tags=["layouts"])
 
 
 @router.get("/", response_model=list[str])

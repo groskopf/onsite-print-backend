@@ -4,6 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app import events
 from app.db import get_connection
 from app.events import router
 from app.main import API_PREFIX

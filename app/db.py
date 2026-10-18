@@ -4,6 +4,7 @@ from fastapi import Request
 from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 
+from app.codes import generate_code
 from app.config import database_url
 
 INITIAL_PRINTER_CODES = (
