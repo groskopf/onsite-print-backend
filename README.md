@@ -3,6 +3,19 @@
 The onsite-print REST API, built with FastAPI and served by uvicorn on port 8000.
 It connects to the PostgreSQL database from `../onsite-print-database`.
 
+## Documentation for developers and agents
+
+Agents should read the [docs/](docs/) folder before working on this backend:
+
+- [Development setup](docs/development.md): environment, tools, tests,
+  troubleshooting, and known Copilot session-sharing limitations.
+- [Architecture](docs/architecture.md): application structure, API conventions,
+  data model, migrations, and deferred features.
+
+These guides preserve project knowledge from local agent sessions so a new
+session does not depend on access to previous chat history. Keep them updated
+when changing the setup or architecture.
+
 All routes live under `/api/v2`, so the same URLs work directly and through the
 nginx web server, which forwards `/api/` to `backend:8000`:
 
@@ -226,7 +239,9 @@ Run `python -m black app tests` to format, `python -m flake8 app tests` to lint,
 `python -m isort app tests` to sort imports, and `python -m mypy app` for type
 checking. `python -m pytest --cov=app` collects test coverage. Saving a Python
 file in the devcontainer formats it with Black and organizes its imports with
-isort.
+isort. Black, isort, Flake8, and Ruff use a 120-character line length. To run
+Flake8, mypy, and pytest from VS Code, run the
+**Python: Run checks** task from the Command Palette (**Tasks: Run Test Task**).
 
 The parent directory is mounted at its original absolute host path so sibling
 repositories and Compose bind mounts remain accessible. Keep the checkout in a
