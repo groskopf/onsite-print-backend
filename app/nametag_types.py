@@ -59,31 +59,6 @@ async def create_nametag_type(nametag_type: NametagType, connection: Connection)
     return NametagType.model_validate(row)
 
 
-@router.get("/{code}/layouts", response_model=list[str])
-async def get_nametag_type_layouts(
-    code: Annotated[str, Path(pattern=r"^[0-9]+$")],
-    connection: Connection,
-) -> list[str]:
-    async with connection.cursor(row_factory=dict_row) as cursor:
-        await cursor.execute(
-            """
-            SELECT ARRAY(
-                SELECT layout.name
-                FROM nametag_type_layout AS supported
-                JOIN layout ON layout.name = supported.layout_name
-                WHERE supported.nametag_type_code = nametag_type.code
-                ORDER BY layout.position, layout.name
-            ) AS layouts
-            FROM nametag_type WHERE code = %s
-            """,
-            (code,),
-        )
-        row = await cursor.fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Nametag type not found")
-    return row["layouts"]
-
-
 @router.get("/", response_model=list[NametagType])
 async def list_nametag_types(connection: Connection) -> list[NametagType]:
     async with connection.cursor(row_factory=dict_row) as cursor:
@@ -108,3 +83,28 @@ async def get_nametag_type(
     if row is None:
         raise HTTPException(status_code=404, detail="Nametag type not found")
     return NametagType.model_validate(row)
+
+
+@router.get("/{code}/layouts", response_model=list[str])
+async def get_nametag_type_layouts(
+    code: Annotated[str, Path(pattern=r"^[0-9]+$")],
+    connection: Connection,
+) -> list[str]:
+    async with connection.cursor(row_factory=dict_row) as cursor:
+        await cursor.execute(
+            """
+            SELECT ARRAY(
+                SELECT layout.name
+                FROM nametag_type_layout AS supported
+                JOIN layout ON layout.name = supported.layout_name
+                WHERE supported.nametag_type_code = nametag_type.code
+                ORDER BY layout.position, layout.name
+            ) AS layouts
+            FROM nametag_type WHERE code = %s
+            """,
+            (code,),
+        )
+        row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Nametag type not found")
+    return row["layouts"]
