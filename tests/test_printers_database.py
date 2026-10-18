@@ -34,8 +34,87 @@ for printer in EXPECTED_PRINTERS:
     )
 
 
-def test_seed_create_lookup_and_restart(monkeypatch):
+def use_schema(monkeypatch, conninfo, schema):
+    monkeypatch.setattr(
+        main,
+        "create_pool",
+        lambda: AsyncConnectionPool(conninfo, open=False, kwargs={"options": f"-c search_path={schema}"}),
+    )
+
+
+def by_code(printers):
+    return sorted(printers, key=lambda printer: printer["code"])
+
+
+def test_seed_crud_and_restart(monkeypatch):
     schema = f"printer_test_{uuid4().hex}"
+    conninfo = os.environ["TEST_DATABASE_CONNINFO"]
+    with connect(conninfo, autocommit=True) as connection:
+        connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+        try:
+            use_schema(monkeypatch, conninfo, schema)
+            expected = by_code(EXPECTED_PRINTERS)
+            with TestClient(main.app) as client:
+                assert client.get("/api/v2/printers/").json() == expected
+                for printer in expected:
+                    response = client.get(f"/api/v2/printers/{printer['code']}")
+                    assert response.status_code == 200
+                    assert response.json() == printer
+                new_printer = {"code": "NEWPRINTER_13", "label": "13", "description": "New flight case"}
+                payload = {"code": new_printer["code"], "description": new_printer["description"]}
+                response = client.post("/api/v2/printers/", json=payload)
+                assert response.status_code == 201
+                assert response.json() == new_printer
+                assert client.post("/api/v2/printers/", json=payload).status_code == 409
+                assert client.get("/api/v2/printers/UNKNOWN_1").status_code == 404
+
+                updated = {**expected[0], "description": "Updated description"}
+                response = client.put(
+                    f"/api/v2/printers/{updated['code']}", json={"description": "Updated description"},
+                )
+                assert response.status_code == 200
+                assert response.json() == updated
+                assert client.put("/api/v2/printers/UNKNOWN_1", json={"description": "x"}).status_code == 404
+
+                event_code = client.post("/api/v2/events/", json={
+                    "name": "Print conference", "start_date": "2026-11-01", "end_date": "2026-11-02",
+                }).json()["code"]
+                booked = "1OPYKBGXVN_1"
+                assert client.post("/api/v2/bookings/", json={
+                    "event_code": event_code, "printer_code": booked, "nametag_type": "4760100",
+                    "start_date": "2026-11-01", "end_date": "2026-11-02",
+                }).status_code == 201
+                response = client.delete(f"/api/v2/printers/{booked}")
+                assert response.status_code == 409
+                assert response.json() == {"detail": "Printer has bookings"}
+
+                removed = "ALGCSOIO9O_A"
+                response = client.delete(f"/api/v2/printers/{removed}")
+                assert response.status_code == 200
+                assert response.json()["code"] == removed
+                assert client.get(f"/api/v2/printers/{removed}").status_code == 404
+                assert client.delete(f"/api/v2/printers/{removed}").status_code == 404
+
+            remaining = by_code(
+                [updated if p["code"] == updated["code"] else p for p in expected if p["code"] != removed]
+                + [new_printer]
+            )
+            with TestClient(main.app) as client:
+                assert client.get("/api/v2/printers/").json() == remaining
+                paths = client.get("/api/v2/openapi.json").json()["paths"]
+                assert {"get", "post"} <= paths["/api/v2/printers/"].keys()
+                assert {"get", "put", "delete"} <= paths["/api/v2/printers/{code}"].keys()
+
+            connection.execute(sql.SQL("DELETE FROM {}.booking").format(sql.Identifier(schema)))
+            connection.execute(sql.SQL("DELETE FROM {}.printer").format(sql.Identifier(schema)))
+            with TestClient(main.app) as client:
+                assert client.get("/api/v2/printers/").json() == expected
+        finally:
+            connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+
+
+def test_existing_printers_are_not_reseeded(monkeypatch):
+    schema = f"printer_upgrade_test_{uuid4().hex}"
     conninfo = os.environ["TEST_DATABASE_CONNINFO"]
     with connect(conninfo, autocommit=True) as connection:
         connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
@@ -47,59 +126,17 @@ def test_seed_create_lookup_and_restart(monkeypatch):
                 )
             """).format(sql.Identifier(schema)))
             connection.execute(sql.SQL("""
-                INSERT INTO {}.printer (code, label) VALUES ('ALGCSOIO9O_A', 'A')
+                INSERT INTO {}.printer (code, label) VALUES ('ALGCSOIO9O_A', 'A'), ('CUSTOM_X', 'X')
             """).format(sql.Identifier(schema)))
-            monkeypatch.setattr(
-                main,
-                "create_pool",
-                lambda: AsyncConnectionPool(
-                    conninfo,
-                    open=False,
-                    kwargs={"options": f"-c search_path={schema}"},
-                ),
-            )
-            expected = sorted(EXPECTED_PRINTERS, key=lambda printer: printer["code"])
-            with TestClient(main.app) as client:
-                assert client.get("/api/v2/printer/").json() == expected
-                for printer in expected:
-                    response = client.get(f"/api/v2/printer/{printer['code']}")
-                    assert response.status_code == 200
-                    assert response.json() == printer
-                new_printer = {
-                    "code": "NEWPRINTER_13",
-                    "label": "13",
-                    "description": "New flight case",
-                }
-                payload = {"code": new_printer["code"], "description": new_printer["description"]}
-                response = client.put("/api/v2/printer/", json=payload)
-                assert response.status_code == 201
-                assert response.json() == new_printer
-                assert (
-                    client.put(
-                        "/api/v2/printer/",
-                        json=payload,
-                    ).status_code
-                    == 409
-                )
-                assert client.get("/api/v2/printer/UNKNOWN_1").status_code == 404
-                assert client.get("/api/v2/printer/").status_code == 200
-            connection.execute(sql.SQL("""
-                UPDATE {}.printer SET description = 'Updated virtual printer'
-                WHERE code = 'ALGCSOIO9O_A'
-            """).format(sql.Identifier(schema)))
-            expected = [
-                {**printer, "description": "Updated virtual printer"} if printer["code"] == "ALGCSOIO9O_A" else printer
-                for printer in expected
-            ]
-            with TestClient(main.app) as client:
-                response = client.get("/api/v2/printer/")
-                assert response.status_code == 200
-                assert response.json() == sorted(
-                    expected + [new_printer],
-                    key=lambda printer: printer["code"],
-                )
-                paths = client.get("/api/v2/openapi.json").json()["paths"]
-                assert {"get", "put"} <= paths["/api/v2/printer/"].keys()
-                assert "get" in paths["/api/v2/printer/{code}"]
+            use_schema(monkeypatch, conninfo, schema)
+            for _ in range(2):
+                with TestClient(main.app) as client:
+                    assert client.get("/api/v2/printers/").json() == [
+                        {
+                            "code": "ALGCSOIO9O_A", "label": "A",
+                            "description": "Virtual printer used to generate labels",
+                        },
+                        {"code": "CUSTOM_X", "label": "X", "description": None},
+                    ]
         finally:
             connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
