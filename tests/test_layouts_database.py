@@ -49,26 +49,25 @@ def test_layout_seeds_associations_constraints_and_restart(monkeypatch):
                 "INSERT INTO {}.layout (name, position) VALUES ('layout_1', 0)"
             ).format(sql.Identifier(schema)))
             with TestClient(main.app) as client:
-                response = client.get("/api/v2/layout/")
+                response = client.get("/api/v2/layouts/")
                 assert response.status_code == 200
                 assert response.json() == EXPECTED_LAYOUTS
                 assert len(response.json()) == len(set(response.json())) == 35
                 for code in ("4760100", "4786103"):
-                    response = client.get(f"/api/v2/nametag_type/{code}/layouts")
+                    response = client.get(f"/api/v2/nametag_types/{code}/layouts")
                     assert response.status_code == 200
                     assert response.json() == EXPECTED_LAYOUTS
-                response = client.put("/api/v2/nametag_type/", json={
-                    "code": "00123", "description": "Custom",
-                    "height": 60, "width": 100, "folded": False,
-                })
-                assert response.status_code == 201
-                response = client.get("/api/v2/nametag_type/00123/layouts")
+                connection.execute(sql.SQL("""
+                    INSERT INTO {}.nametag_type (code, description, height, width, folded)
+                    VALUES ('00123', 'Custom', 60, 100, false)
+                """).format(sql.Identifier(schema)))
+                response = client.get("/api/v2/nametag_types/00123/layouts")
                 assert response.status_code == 200
                 assert response.json() == []
-                assert client.get("/api/v2/nametag_type/999/layouts").status_code == 404
+                assert client.get("/api/v2/nametag_types/999/layouts").status_code == 404
                 paths = client.get("/api/v2/openapi.json").json()["paths"]
-                assert set(paths["/api/v2/layout/"]) == {"get"}
-                assert set(paths["/api/v2/nametag_type/{code}/layouts"]) == {"get"}
+                assert set(paths["/api/v2/layouts/"]) == {"get"}
+                assert set(paths["/api/v2/nametag_types/{code}/layouts"]) == {"get"}
 
             descriptions = dict(connection.execute(sql.SQL(
                 "SELECT name, description FROM {}.layout"
@@ -109,12 +108,12 @@ def test_layout_seeds_associations_constraints_and_restart(monkeypatch):
             expected = EXPECTED_LAYOUTS[1:] + ["layout_1"]
             for _ in range(2):
                 with TestClient(main.app) as client:
-                    assert client.get("/api/v2/layout/").json() == expected + ["custom"]
+                    assert client.get("/api/v2/layouts/").json() == expected + ["custom"]
                     assert client.get(
-                        "/api/v2/nametag_type/00123/layouts",
+                        "/api/v2/nametag_types/00123/layouts",
                     ).json() == ["custom"]
                     assert client.get(
-                        "/api/v2/nametag_type/4760100/layouts",
+                        "/api/v2/nametag_types/4760100/layouts",
                     ).json() == expected
                 assert connection.execute(sql.SQL(
                     "SELECT description FROM {}.layout WHERE name = 'layout_1'"

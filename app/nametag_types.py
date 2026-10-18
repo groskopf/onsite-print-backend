@@ -35,30 +35,6 @@ class NametagType(BaseModel):
 Connection = Annotated[AsyncConnection, Depends(get_connection)]
 
 
-@router.put("/", response_model=NametagType, status_code=status.HTTP_201_CREATED)
-async def create_nametag_type(nametag_type: NametagType, connection: Connection) -> NametagType:
-    async with connection.cursor(row_factory=dict_row) as cursor:
-        await cursor.execute(
-            """
-            INSERT INTO nametag_type (code, description, height, width, folded)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (code) DO NOTHING
-            RETURNING code, description, height, width, folded
-            """,
-            (
-                nametag_type.code,
-                nametag_type.description,
-                nametag_type.height,
-                nametag_type.width,
-                nametag_type.folded,
-            ),
-        )
-        row = await cursor.fetchone()
-    if row is None:
-        raise HTTPException(status_code=409, detail="Nametag type code already exists")
-    return NametagType.model_validate(row)
-
-
 @router.get("/", response_model=list[NametagType])
 async def list_nametag_types(connection: Connection) -> list[NametagType]:
     async with connection.cursor(row_factory=dict_row) as cursor:

@@ -151,24 +151,58 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
                 PRIMARY KEY (nametag_type_code, layout_name)
             )
         """)
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS booking (
+                booking_code TEXT PRIMARY KEY CHECK (booking_code ~ '^[A-Z2-7]{16}$'),
+                event_code TEXT NOT NULL REFERENCES event(code),
+                printer_code TEXT NOT NULL REFERENCES printer(code),
+                nametag_type TEXT NOT NULL REFERENCES nametag_type(code),
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL CHECK (end_date >= start_date)
+            )
+        """)
+        await connection.execute("""
+            ALTER TABLE booking ADD COLUMN IF NOT EXISTS event_code TEXT REFERENCES event(code)
+        """)
+        await connection.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM booking WHERE event_code IS NULL) THEN
+                    RAISE EXCEPTION 'Bookings without event_code exist; assign events before startup';
+                END IF;
+                ALTER TABLE booking ALTER COLUMN event_code SET NOT NULL;
+            END
+            $$
+        """)
+        await connection.execute("""
+            CREATE INDEX IF NOT EXISTS booking_printer_dates_idx
+                ON booking (printer_code, start_date, end_date)
+        """)
         async with connection.cursor() as cursor:
             await cursor.executemany(
-                """
-                INSERT INTO printer (code, label, description) VALUES (%s, %s, %s)
-                ON CONFLICT (code) DO UPDATE
-                SET description = EXCLUDED.description
-                WHERE printer.description IS NULL
-                """,
-                [
-                    (code, code.rsplit("_", 1)[1], description)
-                    for code, description in INITIAL_PRINTER_CODES
-                ],
+                "UPDATE printer SET description = %s WHERE code = %s AND description IS NULL",
+                [(description, code) for code, description in INITIAL_PRINTER_CODES],
             )
+            # Default printers only seed an empty table, so deleted printers stay deleted.
+            await cursor.execute("LOCK TABLE printer IN SHARE ROW EXCLUSIVE MODE")
+            await cursor.execute("SELECT EXISTS (SELECT 1 FROM printer)")
+            row = await cursor.fetchone()
+            if row is not None and not row[0]:
+                await cursor.executemany(
+                    "INSERT INTO printer (code, label, description) VALUES (%s, %s, %s)",
+                    [
+                        (code, code.rsplit("_", 1)[1], description)
+                        for code, description in INITIAL_PRINTER_CODES
+                    ],
+                )
+            # Nametag types are a static list defined in code.
             await cursor.executemany(
                 """
                 INSERT INTO nametag_type (code, description, height, width, folded)
                 VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (code) DO NOTHING
+                ON CONFLICT (code) DO UPDATE
+                SET description = EXCLUDED.description, height = EXCLUDED.height,
+                    width = EXCLUDED.width, folded = EXCLUDED.folded
                 """,
                 INITIAL_NAMETAG_TYPES,
             )
