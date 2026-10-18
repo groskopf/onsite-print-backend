@@ -29,5 +29,14 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 packages = ["app"]
 
+[tool.black]
+line-length = 120
+
+[tool.isort]
+line_length = 120
+
+[tool.ruff]
+line-length = 120
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
