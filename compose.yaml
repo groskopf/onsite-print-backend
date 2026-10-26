@@ -17,10 +17,6 @@ services:
       - sheets:/var/lib/onsite-print/sheets
     secrets:
       - postgres_password
-    depends_on:
-      postgres:
-        condition: service_healthy
-        required: false
     restart: unless-stopped
 
 volumes:

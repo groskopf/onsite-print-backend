@@ -611,14 +611,18 @@ bash docker-push.sh
 bash tests/docker-push-test.sh   # tests the script with a mocked Docker CLI
 ```
 
-Alternatively, trigger the **Publish release** GitHub Actions workflow from
-the Actions tab (`workflow_dispatch` only, runs from `main`). It reads the
-pending `IMAGE_TAG` from `.env`, builds and pushes the image to GHCR using the
-built-in `GITHUB_TOKEN`, tags the published commit on `main` with that version
-(no `v` prefix), and commits the incremented `.env` back to `main`. This
-requires a one-time repository setting: allow the GitHub Actions bot to
-bypass `main`'s branch protection for direct pushes, since the workflow pushes
-a tag and a commit straight to `main` without a pull request.
+Alternatively, trigger the **Publish release** GitHub Actions workflow from the
+Actions tab (`workflow_dispatch` only, runs from `main`). It reads the pending
+`IMAGE_TAG` from `.env`, builds and pushes the image to GHCR using the built-in
+`GITHUB_TOKEN`, tags the published commit on `main` with that version (no `v`
+prefix), and commits the incremented `.env` back to `main`. This requires one-
+time setup: personal-account repos can't add GitHub Actions to a ruleset's
+bypass list, so add a `RELEASE_TOKEN` repository secret holding a fine-grained
+personal access token (owned by a repository admin, scoped to this repo with
+Contents: Read and write permission), and add the **Repository admin** role to
+the branch ruleset's bypass list for `main`. Pushes authenticated with
+`RELEASE_TOKEN` are attributed to the token owner's admin role and bypass the
+pull-request requirement. Renew the token before it expires.
 
 GitHub Actions runs the publishing-script tests on pushes and pull requests
 against this repo's own script. They do not build or upload images and require
