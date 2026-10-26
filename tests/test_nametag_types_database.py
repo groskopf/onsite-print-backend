@@ -41,9 +41,11 @@ def test_nametag_types_are_static_and_read_only(monkeypatch):
                 assert set(paths["/api/v2/nametag_types/"]) == {"get"}
                 assert set(paths["/api/v2/nametag_types/{code}"]) == {"get"}
 
-            connection.execute(sql.SQL(
-                "UPDATE {}.nametag_type SET description = 'Changed', height = 1 WHERE code = '4760100'"
-            ).format(sql.Identifier(schema)))
+            connection.execute(
+                sql.SQL("UPDATE {}.nametag_type SET description = 'Changed', height = 1 WHERE code = '4760100'").format(
+                    sql.Identifier(schema)
+                )
+            )
             with TestClient(main.app) as client:
                 assert client.get("/api/v2/nametag_types/").json() == EXPECTED
         finally:

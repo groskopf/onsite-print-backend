@@ -28,6 +28,10 @@ INITIAL_NAMETAG_TYPES = (
     ("4760100", "Name tag 60x100 mm", 60, 100, False),
 )
 
+INITIAL_SHEET_TYPES = (("456090", "A4 sheet with 60x90 mm labels", 60, 90, False),)
+
+INITIAL_SHEET_LAYOUTS = (("456090", "layout_1"),)
+
 INITIAL_LAYOUTS = (
     ("layout_1", "En linie"),
     ("layout_2", "To liner"),
@@ -99,6 +103,24 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
                 [(generate_code(), event_id) for event_id in event_ids],
             )
         await connection.execute("ALTER TABLE event ALTER COLUMN code SET NOT NULL")
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS attendee (
+                code TEXT PRIMARY KEY CHECK (code ~ '^[0-9a-f]{64}$'),
+                event_code TEXT NOT NULL REFERENCES event(code) ON DELETE CASCADE,
+                first_name TEXT NOT NULL CHECK (length(trim(first_name)) > 0),
+                last_name TEXT NOT NULL CHECK (length(trim(last_name)) > 0),
+                address TEXT CHECK (length(trim(address)) > 0),
+                zip TEXT CHECK (length(trim(zip)) > 0),
+                city TEXT CHECK (length(trim(city)) > 0),
+                country TEXT CHECK (length(trim(country)) > 0),
+                company TEXT CHECK (length(trim(company)) > 0),
+                phone TEXT CHECK (length(trim(phone)) > 0),
+                email TEXT CHECK (length(trim(email)) > 0)
+            )
+        """)
+        await connection.execute("""
+            CREATE INDEX IF NOT EXISTS attendee_event_code_idx ON attendee (event_code)
+        """)
         await connection.execute("""
             CREATE TABLE IF NOT EXISTS printer (
                 code TEXT PRIMARY KEY CHECK (code ~ '^[A-Za-z0-9]+_[A-Za-z0-9]+$'),
@@ -173,6 +195,24 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
             )
         """)
         await connection.execute("""
+            CREATE TABLE IF NOT EXISTS sheet_type (
+                code TEXT PRIMARY KEY CHECK (code ~ '^[0-9]+$'),
+                description TEXT NOT NULL CHECK (length(trim(description)) > 0),
+                height DOUBLE PRECISION NOT NULL
+                    CHECK (height > 0 AND height < 'Infinity'::double precision),
+                width DOUBLE PRECISION NOT NULL
+                    CHECK (width > 0 AND width < 'Infinity'::double precision),
+                folded BOOLEAN NOT NULL
+            )
+        """)
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS sheet_type_layout (
+                sheet_type_code TEXT NOT NULL REFERENCES sheet_type(code),
+                layout_name TEXT NOT NULL REFERENCES layout(name),
+                PRIMARY KEY (sheet_type_code, layout_name)
+            )
+        """)
+        await connection.execute("""
             ALTER TABLE booking ADD COLUMN IF NOT EXISTS event_code TEXT REFERENCES event(code)
         """)
         await connection.execute("""
@@ -201,10 +241,7 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
             if row is not None and not row[0]:
                 await cursor.executemany(
                     "INSERT INTO printer (code, label, description) VALUES (%s, %s, %s)",
-                    [
-                        (code, code.rsplit("_", 1)[1], description)
-                        for code, description in INITIAL_PRINTER_CODES
-                    ],
+                    [(code, code.rsplit("_", 1)[1], description) for code, description in INITIAL_PRINTER_CODES],
                 )
             # Nametag types are a static list defined in code.
             await cursor.executemany(
@@ -219,15 +256,22 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
             )
             await cursor.executemany(
                 """
+                INSERT INTO sheet_type (code, description, height, width, folded)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (code) DO UPDATE
+                SET description = EXCLUDED.description, height = EXCLUDED.height,
+                    width = EXCLUDED.width, folded = EXCLUDED.folded
+                """,
+                INITIAL_SHEET_TYPES,
+            )
+            await cursor.executemany(
+                """
                 INSERT INTO layout (name, position, description) VALUES (%s, %s, %s)
                 ON CONFLICT (name) DO UPDATE
                 SET description = EXCLUDED.description
                 WHERE layout.description IS NULL
                 """,
-                [
-                    (name, position, description)
-                    for position, (name, description) in enumerate(INITIAL_LAYOUTS)
-                ],
+                [(name, position, description) for position, (name, description) in enumerate(INITIAL_LAYOUTS)],
             )
             await cursor.executemany(
                 """
@@ -235,11 +279,15 @@ async def initialize_schema(pool: AsyncConnectionPool) -> None:
                 VALUES (%s, %s)
                 ON CONFLICT (nametag_type_code, layout_name) DO NOTHING
                 """,
-                [
-                    (code, name)
-                    for code, *_ in INITIAL_NAMETAG_TYPES
-                    for name, _ in INITIAL_LAYOUTS
-                ],
+                [(code, name) for code, *_ in INITIAL_NAMETAG_TYPES for name, _ in INITIAL_LAYOUTS],
+            )
+            await cursor.executemany(
+                """
+                INSERT INTO sheet_type_layout (sheet_type_code, layout_name)
+                VALUES (%s, %s)
+                ON CONFLICT (sheet_type_code, layout_name) DO NOTHING
+                """,
+                INITIAL_SHEET_LAYOUTS,
             )
 
 

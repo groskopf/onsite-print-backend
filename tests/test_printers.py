@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.db import get_connection
+from app.endpoint_printers import router
 from app.main import API_PREFIX
-from app.printers import router
 
 
 class FakeCursor:
@@ -57,15 +57,24 @@ def printer_client():
         yield client, cursor
 
 
-@pytest.mark.parametrize(("code", "label"), [
-    ("ALGCSOIO9O_A", "A"), ("COIC1PEJ8J_10", "10"), ("Pey3NazUi3_B", "B"),
-])
+@pytest.mark.parametrize(
+    ("code", "label"),
+    [
+        ("ALGCSOIO9O_A", "A"),
+        ("COIC1PEJ8J_10", "10"),
+        ("Pey3NazUi3_B", "B"),
+    ],
+)
 def test_create_printer_derives_label(printer_client, code, label):
     client, cursor = printer_client
     cursor.rows = [{"code": code, "label": label, "description": "Test printer"}]
-    response = client.post("/api/v2/printers/", json={
-        "code": f"  {code}  ", "description": "  Test printer  ",
-    })
+    response = client.post(
+        "/api/v2/printers/",
+        json={
+            "code": f"  {code}  ",
+            "description": "  Test printer  ",
+        },
+    )
     assert response.status_code == 201
     assert response.json() == {"code": code, "label": label, "description": "Test printer"}
     assert cursor.params == (code, label, "Test printer")
@@ -75,9 +84,13 @@ def test_create_printer_derives_label(printer_client, code, label):
 def test_duplicate_printer(printer_client):
     client, cursor = printer_client
     cursor.rows = []
-    response = client.post("/api/v2/printers/", json={
-        "code": "ALGCSOIO9O_A", "description": "Duplicate",
-    })
+    response = client.post(
+        "/api/v2/printers/",
+        json={
+            "code": "ALGCSOIO9O_A",
+            "description": "Duplicate",
+        },
+    )
     assert response.status_code == 409
     assert response.json() == {"detail": "Printer code already exists"}
 
@@ -113,17 +126,31 @@ def test_empty_printer_list(printer_client):
     assert client.get("/api/v2/printers/").json() == []
 
 
-@pytest.mark.parametrize("payload", [
-    {}, {"code": None}, {"code": 123}, {"code": ""}, {"code": "  "},
-    {"code": "NO-SUFFIX"}, {"code": "_A"}, {"code": "ABC_"},
-    {"code": "ABC_A_B"}, {"code": "ABC_'"},
-    {"code": "ABC_A", "label": "custom"},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"code": None},
+        {"code": 123},
+        {"code": ""},
+        {"code": "  "},
+        {"code": "NO-SUFFIX"},
+        {"code": "_A"},
+        {"code": "ABC_"},
+        {"code": "ABC_A_B"},
+        {"code": "ABC_'"},
+        {"code": "ABC_A", "label": "custom"},
+    ],
+)
 def test_invalid_printer_is_rejected(printer_client, payload):
     client, cursor = printer_client
-    assert client.post(
-        "/api/v2/printers/", json={"description": "Test printer", **payload},
-    ).status_code == 422
+    assert (
+        client.post(
+            "/api/v2/printers/",
+            json={"description": "Test printer", **payload},
+        ).status_code
+        == 422
+    )
     assert cursor.query is None
 
 
@@ -136,9 +163,13 @@ def test_invalid_lookup_code(printer_client):
 @pytest.mark.parametrize("description", [None, "", "   ", 123, [], {}])
 def test_invalid_description(printer_client, description):
     client, cursor = printer_client
-    response = client.post("/api/v2/printers/", json={
-        "code": "NEWPRINTER_13", "description": description,
-    })
+    response = client.post(
+        "/api/v2/printers/",
+        json={
+            "code": "NEWPRINTER_13",
+            "description": description,
+        },
+    )
     assert response.status_code == 422
     assert cursor.query is None
 
@@ -181,11 +212,16 @@ def test_update_printer_description(printer_client):
     assert cursor.params == ("Updated", "ALGCSOIO9O_A")
 
 
-@pytest.mark.parametrize("payload", [
-    {}, {"description": None}, {"description": "  "},
-    {"description": "Updated", "code": "ALGCSOIO9O_A"},
-    {"description": "Updated", "label": "B"},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"description": None},
+        {"description": "  "},
+        {"description": "Updated", "code": "ALGCSOIO9O_A"},
+        {"description": "Updated", "label": "B"},
+    ],
+)
 def test_invalid_printer_update(printer_client, payload):
     client, cursor = printer_client
     assert client.put(URL, json=payload).status_code == 422

@@ -64,7 +64,8 @@ async def list_printers(connection: Connection) -> list[Printer]:
 async def get_printer(code: PrinterCode, connection: Connection) -> Printer:
     async with connection.cursor(row_factory=dict_row) as cursor:
         await cursor.execute(
-            "SELECT code, label, description FROM printer WHERE code = %s", (code,),
+            "SELECT code, label, description FROM printer WHERE code = %s",
+            (code,),
         )
         row = await cursor.fetchone()
     if row is None:
@@ -96,7 +97,8 @@ async def delete_printer(code: PrinterCode, connection: Connection) -> Printer:
         if await cursor.fetchone() is not None:
             raise HTTPException(status_code=409, detail="Printer has bookings")
         await cursor.execute(
-            "DELETE FROM printer WHERE code = %s RETURNING code, label, description", (code,),
+            "DELETE FROM printer WHERE code = %s RETURNING code, label, description",
+            (code,),
         )
         row = await cursor.fetchone()
     if row is None:

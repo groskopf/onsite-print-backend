@@ -38,7 +38,9 @@ def test_existing_events_gain_nullable_addresses(monkeypatch):
                 main,
                 "create_pool",
                 lambda: AsyncConnectionPool(
-                    conninfo, open=False, kwargs={"options": f"-c search_path={schema}"},
+                    conninfo,
+                    open=False,
+                    kwargs={"options": f"-c search_path={schema}"},
                 ),
             )
             codes: list[str] = []
@@ -49,19 +51,22 @@ def test_existing_events_gain_nullable_addresses(monkeypatch):
                     code = response.json()[0]["code"]
                     codes.append(code)
                     assert re.fullmatch(CODE_PATTERN, code)
-                    assert response.json() == [{
-                        "id": 1,
-                        "code": code,
-                        "name": "Existing event",
-                        "start_date": "2026-10-09",
-                        "end_date": "2026-10-10",
-                        "street": None, "zip": None, "town": None, "country": None,
-                    }]
+                    assert response.json() == [
+                        {
+                            "id": 1,
+                            "code": code,
+                            "name": "Existing event",
+                            "start_date": "2026-10-09",
+                            "end_date": "2026-10-10",
+                            "street": None,
+                            "zip": None,
+                            "town": None,
+                            "country": None,
+                        }
+                    ]
             assert codes[0] == codes[1]
         finally:
-            connection.execute(
-                sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema))
-            )
+            connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
 
 
 def test_events_persist_across_app_restarts(monkeypatch):
@@ -94,8 +99,13 @@ def test_events_persist_across_app_restarts(monkeypatch):
             assert response.status_code == 201
             event = response.json()
             assert event == {
-                "street": None, "zip": None, "town": None, "country": None,
-                **payload, "id": event["id"], "code": event["code"],
+                "street": None,
+                "zip": None,
+                "town": None,
+                "country": None,
+                **payload,
+                "id": event["id"],
+                "code": event["code"],
             }
             created.append(event)
         assert created[0]["id"] < created[1]["id"]
@@ -119,7 +129,9 @@ def test_get_update_and_delete_event_with_bookings(monkeypatch):
                 main,
                 "create_pool",
                 lambda: AsyncConnectionPool(
-                    conninfo, open=False, kwargs={"options": f"-c search_path={schema}"},
+                    conninfo,
+                    open=False,
+                    kwargs={"options": f"-c search_path={schema}"},
                 ),
             )
             payload = {"name": "Print conference", "start_date": "2026-11-01", "end_date": "2026-11-12"}
@@ -136,10 +148,16 @@ def test_get_update_and_delete_event_with_bookings(monkeypatch):
                 assert client.get(url).json() == updated
 
                 def booking(event, printer_code):
-                    return client.post("/api/v2/bookings/", json={
-                        "event_code": event["code"], "printer_code": printer_code,
-                        "nametag_type": "4760100", "start_date": "2026-11-01", "end_date": "2026-11-02",
-                    }).json()
+                    return client.post(
+                        "/api/v2/bookings/",
+                        json={
+                            "event_code": event["code"],
+                            "printer_code": printer_code,
+                            "nametag_type": "4760100",
+                            "start_date": "2026-11-01",
+                            "end_date": "2026-11-02",
+                        },
+                    ).json()
 
                 kept_booking = booking(kept, "1OPYKBGXVN_1")
                 booking(removed, "YF1OF5FWZ0_2")

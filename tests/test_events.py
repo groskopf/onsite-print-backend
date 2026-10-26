@@ -4,9 +4,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import events
+from app import endpoint_events
 from app.db import get_connection
-from app.events import router
+from app.endpoint_events import router
 from app.main import API_PREFIX
 
 EMPTY_ADDRESS = {"street": None, "zip": None, "town": None, "country": None}
@@ -67,7 +67,7 @@ def event_client():
 
 
 def test_create_event(event_client, monkeypatch):
-    monkeypatch.setattr(events, "generate_code", lambda: "ABCDEFGHIJKLMNOP")
+    monkeypatch.setattr(endpoint_events, "generate_code", lambda: "ABCDEFGHIJKLMNOP")
     client, cursor = event_client
     payload = {
         "name": "  Print conference  ",
@@ -77,7 +77,11 @@ def test_create_event(event_client, monkeypatch):
     response = client.post("/api/v2/events/", json=payload)
     assert response.status_code == 201
     assert response.json() == {
-        **payload, **EMPTY_ADDRESS, "id": 1, "code": "ABCDEFGHIJKLMNOP", "name": "Print conference",
+        **payload,
+        **EMPTY_ADDRESS,
+        "id": 1,
+        "code": "ABCDEFGHIJKLMNOP",
+        "name": "Print conference",
     }
     assert "INSERT INTO event" in cursor.query
     assert cursor.params[0] == "ABCDEFGHIJKLMNOP"
@@ -85,7 +89,10 @@ def test_create_event(event_client, monkeypatch):
         "Print conference",
         date(2026, 10, 9),
         date(2026, 10, 10),
-        None, None, None, None,
+        None,
+        None,
+        None,
+        None,
     )
 
 
@@ -93,14 +100,16 @@ def test_list_events(event_client):
     client, cursor = event_client
     response = client.get("/api/v2/events/")
     assert response.status_code == 200
-    assert response.json() == [{
-        "id": 1,
-        "code": "ABCDEFGHIJKLMNOP",
-        "name": "Print conference",
-        "start_date": "2026-10-09",
-        "end_date": "2026-10-10",
-        **EMPTY_ADDRESS,
-    }]
+    assert response.json() == [
+        {
+            "id": 1,
+            "code": "ABCDEFGHIJKLMNOP",
+            "name": "Print conference",
+            "start_date": "2026-10-09",
+            "end_date": "2026-10-10",
+            **EMPTY_ADDRESS,
+        }
+    ]
     assert "ORDER BY id" in cursor.query
 
 
@@ -110,26 +119,30 @@ def test_empty_list(event_client):
     assert client.get("/api/v2/events/").json() == []
 
 
-@pytest.mark.parametrize("address", [
-    {"street": "  Main Street 12  ", "zip": "  0123  ",
-     "town": "  Copenhagen  ", "country": "  Denmark  "},
-    {"zip": "SW1A 1AA"},
-    EMPTY_ADDRESS,
-])
+@pytest.mark.parametrize(
+    "address",
+    [
+        {"street": "  Main Street 12  ", "zip": "  0123  ", "town": "  Copenhagen  ", "country": "  Denmark  "},
+        {"zip": "SW1A 1AA"},
+        EMPTY_ADDRESS,
+    ],
+)
 def test_optional_address_is_stored_and_returned(event_client, address):
     client, cursor = event_client
     expected = {
         **EMPTY_ADDRESS,
-        **{key: value.strip() if value is not None else None
-           for key, value in address.items()},
+        **{key: value.strip() if value is not None else None for key, value in address.items()},
     }
     cursor.rows[0].update(expected)
-    response = client.post("/api/v2/events/", json={
-        "name": "Print conference",
-        "start_date": "2026-10-09",
-        "end_date": "2026-10-10",
-        **address,
-    })
+    response = client.post(
+        "/api/v2/events/",
+        json={
+            "name": "Print conference",
+            "start_date": "2026-10-09",
+            "end_date": "2026-10-10",
+            **address,
+        },
+    )
     assert response.status_code == 201
     assert {key: response.json()[key] for key in EMPTY_ADDRESS} == expected
     assert cursor.params[4:] == tuple(expected.values())
@@ -141,23 +154,29 @@ def test_optional_address_is_stored_and_returned(event_client, address):
 @pytest.mark.parametrize("value", ["", "   ", 123, [], {}])
 def test_invalid_address_fields_are_rejected(event_client, field, value):
     client, cursor = event_client
-    response = client.post("/api/v2/events/", json={
-        "name": "Print conference",
-        "start_date": "2026-10-09",
-        "end_date": "2026-10-10",
-        field: value,
-    })
+    response = client.post(
+        "/api/v2/events/",
+        json={
+            "name": "Print conference",
+            "start_date": "2026-10-09",
+            "end_date": "2026-10-10",
+            field: value,
+        },
+    )
     assert response.status_code == 422
     assert cursor.query is None
 
 
-@pytest.mark.parametrize("changes", [
-    {"name": ""},
-    {"name": "   "},
-    {"start_date": "not-a-date"},
-    {"end_date": "2026-10-08"},
-    {"extra_field": True},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"name": ""},
+        {"name": "   "},
+        {"start_date": "not-a-date"},
+        {"end_date": "2026-10-08"},
+        {"extra_field": True},
+    ],
+)
 def test_invalid_events_are_rejected(event_client, changes):
     client, cursor = event_client
     payload = {
@@ -187,11 +206,14 @@ def test_required_fields(event_client, field):
 def test_same_day_event_is_valid(event_client):
     client, cursor = event_client
     cursor.rows[0]["end_date"] = date(2026, 10, 9)
-    response = client.post("/api/v2/events/", json={
-        "name": "Print conference",
-        "start_date": "2026-10-09",
-        "end_date": "2026-10-09",
-    })
+    response = client.post(
+        "/api/v2/events/",
+        json={
+            "name": "Print conference",
+            "start_date": "2026-10-09",
+            "end_date": "2026-10-09",
+        },
+    )
     assert response.status_code == 201
 
 
@@ -227,8 +249,9 @@ def test_get_event(event_client):
 
 def test_update_event(event_client):
     client, cursor = event_client
-    cursor.rows[0].update(name="Renamed conference", start_date=date(2026, 10, 11),
-                          end_date=date(2026, 10, 12), town="Aarhus")
+    cursor.rows[0].update(
+        name="Renamed conference", start_date=date(2026, 10, 11), end_date=date(2026, 10, 12), town="Aarhus"
+    )
     response = client.put(URL, json=UPDATE)
     assert response.status_code == 200
     assert response.json()["name"] == "Renamed conference"
@@ -236,8 +259,14 @@ def test_update_event(event_client):
     assert cursor.query.lstrip().startswith("UPDATE event")
     assert "code = %s" not in cursor.query.split("WHERE")[0]
     assert cursor.params == (
-        "Renamed conference", date(2026, 10, 11), date(2026, 10, 12),
-        None, None, "Aarhus", None, CODE,
+        "Renamed conference",
+        date(2026, 10, 11),
+        date(2026, 10, 12),
+        None,
+        None,
+        "Aarhus",
+        None,
+        CODE,
     )
 
 

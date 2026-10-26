@@ -70,20 +70,35 @@ def test_seed_crud_and_restart(monkeypatch):
 
                 updated = {**expected[0], "description": "Updated description"}
                 response = client.put(
-                    f"/api/v2/printers/{updated['code']}", json={"description": "Updated description"},
+                    f"/api/v2/printers/{updated['code']}",
+                    json={"description": "Updated description"},
                 )
                 assert response.status_code == 200
                 assert response.json() == updated
                 assert client.put("/api/v2/printers/UNKNOWN_1", json={"description": "x"}).status_code == 404
 
-                event_code = client.post("/api/v2/events/", json={
-                    "name": "Print conference", "start_date": "2026-11-01", "end_date": "2026-11-02",
-                }).json()["code"]
+                event_code = client.post(
+                    "/api/v2/events/",
+                    json={
+                        "name": "Print conference",
+                        "start_date": "2026-11-01",
+                        "end_date": "2026-11-02",
+                    },
+                ).json()["code"]
                 booked = "1OPYKBGXVN_1"
-                assert client.post("/api/v2/bookings/", json={
-                    "event_code": event_code, "printer_code": booked, "nametag_type": "4760100",
-                    "start_date": "2026-11-01", "end_date": "2026-11-02",
-                }).status_code == 201
+                assert (
+                    client.post(
+                        "/api/v2/bookings/",
+                        json={
+                            "event_code": event_code,
+                            "printer_code": booked,
+                            "nametag_type": "4760100",
+                            "start_date": "2026-11-01",
+                            "end_date": "2026-11-02",
+                        },
+                    ).status_code
+                    == 201
+                )
                 response = client.delete(f"/api/v2/printers/{booked}")
                 assert response.status_code == 409
                 assert response.json() == {"detail": "Printer has bookings"}
@@ -133,7 +148,8 @@ def test_existing_printers_are_not_reseeded(monkeypatch):
                 with TestClient(main.app) as client:
                     assert client.get("/api/v2/printers/").json() == [
                         {
-                            "code": "ALGCSOIO9O_A", "label": "A",
+                            "code": "ALGCSOIO9O_A",
+                            "label": "A",
                             "description": "Virtual printer used to generate labels",
                         },
                         {"code": "CUSTOM_X", "label": "X", "description": None},

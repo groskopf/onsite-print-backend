@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.db import get_connection
-from app.layouts import router
+from app.endpoint_layouts import router
 from app.main import API_PREFIX
 
 

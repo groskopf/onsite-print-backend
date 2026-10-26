@@ -41,6 +41,14 @@ EventCode = Annotated[str, Path(pattern=CODE_PATTERN)]
 EVENT_COLUMNS = "id, code, name, start_date, end_date, street, zip, town, country"
 
 
+async def require_event(event_code: EventCode, connection: Connection) -> str:
+    async with connection.cursor() as cursor:
+        await cursor.execute("SELECT 1 FROM event WHERE code = %s FOR KEY SHARE", (event_code,))
+        if await cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+    return event_code
+
+
 @router.post("/", response_model=Event, status_code=status.HTTP_201_CREATED)
 async def create_event(event: EventCreate, connection: Connection) -> Event:
     async with connection.cursor(row_factory=dict_row) as cursor:
@@ -52,8 +60,13 @@ async def create_event(event: EventCreate, connection: Connection) -> Event:
             """,
             (
                 generate_code(),
-                event.name, event.start_date, event.end_date,
-                event.street, event.zip, event.town, event.country,
+                event.name,
+                event.start_date,
+                event.end_date,
+                event.street,
+                event.zip,
+                event.town,
+                event.country,
             ),
         )
         row = await cursor.fetchone()
@@ -65,9 +78,7 @@ async def create_event(event: EventCreate, connection: Connection) -> Event:
 @router.get("/", response_model=list[Event])
 async def list_events(connection: Connection) -> list[Event]:
     async with connection.cursor(row_factory=dict_row) as cursor:
-        await cursor.execute(
-            f"SELECT {EVENT_COLUMNS} FROM event ORDER BY id"
-        )
+        await cursor.execute(f"SELECT {EVENT_COLUMNS} FROM event ORDER BY id")
         rows = await cursor.fetchall()
     return [Event.model_validate(row) for row in rows]
 
@@ -93,8 +104,13 @@ async def update_event(event_code: EventCode, event: EventCreate, connection: Co
             RETURNING {EVENT_COLUMNS}
             """,
             (
-                event.name, event.start_date, event.end_date,
-                event.street, event.zip, event.town, event.country,
+                event.name,
+                event.start_date,
+                event.end_date,
+                event.street,
+                event.zip,
+                event.town,
+                event.country,
                 event_code,
             ),
         )
