@@ -611,6 +611,15 @@ bash docker-push.sh
 bash tests/docker-push-test.sh   # tests the script with a mocked Docker CLI
 ```
 
+Alternatively, trigger the **Publish release** GitHub Actions workflow from
+the Actions tab (`workflow_dispatch` only, runs from `main`). It reads the
+pending `IMAGE_TAG` from `.env`, builds and pushes the image to GHCR using the
+built-in `GITHUB_TOKEN`, tags the published commit on `main` with that version
+(no `v` prefix), and commits the incremented `.env` back to `main`. This
+requires a one-time repository setting: allow the GitHub Actions bot to
+bypass `main`'s branch protection for direct pushes, since the workflow pushes
+a tag and a commit straight to `main` without a pull request.
+
 GitHub Actions runs the publishing-script tests on pushes and pull requests
 against this repo's own script. They do not build or upload images and require
 no credentials or sibling repositories.
