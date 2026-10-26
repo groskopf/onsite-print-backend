@@ -15,3 +15,11 @@ def database_url() -> str:
 
 def nametags_dir() -> Path:
     return Path(os.environ.get("NAMETAGS_DIR", "/var/lib/onsite-print/nametags"))
+
+
+def images_dir() -> Path:
+    return Path(os.environ.get("IMAGES_DIR", "/var/lib/onsite-print/images"))
+
+
+def sheets_dir() -> Path:
+    return Path(os.environ.get("SHEETS_DIR", "/var/lib/onsite-print/sheets"))

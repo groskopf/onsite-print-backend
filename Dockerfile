@@ -5,12 +5,15 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 RUN python -m venv "${VIRTUAL_ENV}"
 WORKDIR /srv
-COPY pyproject.toml ./
+COPY pyproject.toml LICENSE-legacy ./
 COPY app ./app
 RUN python -m pip install --no-cache-dir .
 
 ENV NAMETAGS_DIR=/var/lib/onsite-print/nametags
-RUN mkdir -p "${NAMETAGS_DIR}" && chown nobody:nogroup "${NAMETAGS_DIR}"
+ENV IMAGES_DIR=/var/lib/onsite-print/images
+ENV SHEETS_DIR=/var/lib/onsite-print/sheets
+RUN mkdir -p "${NAMETAGS_DIR}" "${IMAGES_DIR}" "${SHEETS_DIR}" \
+    && chown nobody:nogroup "${NAMETAGS_DIR}" "${IMAGES_DIR}" "${SHEETS_DIR}"
 
 FROM runtime AS development
 
@@ -32,7 +35,7 @@ RUN apt-get update \
     && chmod 0440 /etc/sudoers.d/vscode \
     && mkdir -p /home/vscode/.vscode-server/data \
     && chown -R vscode:vscode /home/vscode/.vscode-server \
-    && chown -R vscode:vscode "${VIRTUAL_ENV}" "${NAMETAGS_DIR}"
+    && chown -R vscode:vscode "${VIRTUAL_ENV}" "${NAMETAGS_DIR}" "${IMAGES_DIR}" "${SHEETS_DIR}"
 
 USER vscode
 
