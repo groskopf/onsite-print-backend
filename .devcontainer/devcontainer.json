@@ -31,7 +31,8 @@
         "source=${localEnv:HOME}/.config/Code/agentSessionData,target=/home/vscode/.vscode-server/data/agentSessionData,type=bind"
     ],
     "runArgs": [
-        "--add-host=host.docker.internal:host-gateway"
+        "--add-host=host.docker.internal:host-gateway",
+        "--network=onsite-print-database_default"
     ],
     "remoteEnv": {
         "VIRTUAL_ENV": "/opt/onsite-print-venv",
