@@ -1,0 +1,61 @@
+name: Publish release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Publish releases only from main (triggered on $GITHUB_REF)" >&2
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the version to publish
+        run: |
+          version="$(sed -n 's/^IMAGE_TAG=//p' .env)"
+          if [[ -z "$version" ]]; then
+            echo "Could not read IMAGE_TAG from .env" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Check the release tag is not already published
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
+            echo "Tag $VERSION already exists; bump IMAGE_TAG in .env before publishing again" >&2
+            exit 1
+          fi
+
+      - name: Build and push the image(s) to GHCR
+        env:
+          CR_PAT: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: bash docker-push.sh
+
+      - name: Tag the published commit
+        run: |
+          git tag -a "$VERSION" -m "Publish $VERSION"
+          git push origin "refs/tags/$VERSION"
+
+      - name: Commit the next development version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Increment image version after publishing $VERSION [skip ci]"
+          git push origin HEAD:main

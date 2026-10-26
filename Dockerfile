@@ -1,9 +1,45 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS runtime
 
+ENV VIRTUAL_ENV=/opt/onsite-print-venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+RUN python -m venv "${VIRTUAL_ENV}"
 WORKDIR /srv
-COPY pyproject.toml ./
+COPY pyproject.toml LICENSE-legacy ./
 COPY app ./app
-RUN pip install --no-cache-dir .
+RUN python -m pip install --no-cache-dir .
+
+ENV NAMETAGS_DIR=/var/lib/onsite-print/nametags
+ENV IMAGES_DIR=/var/lib/onsite-print/images
+ENV SHEETS_DIR=/var/lib/onsite-print/sheets
+RUN mkdir -p "${NAMETAGS_DIR}" "${IMAGES_DIR}" "${SHEETS_DIR}" \
+    && chown nobody:nogroup "${NAMETAGS_DIR}" "${IMAGES_DIR}" "${SHEETS_DIR}"
+
+FROM runtime AS development
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gh \
+        git \
+        jq \
+        openssh-client \
+        postgresql-client \
+        ripgrep \
+        sudo \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 vscode \
+    && useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home vscode \
+    && echo "vscode ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/vscode \
+    && chmod 0440 /etc/sudoers.d/vscode \
+    && mkdir -p /home/vscode/.vscode-server/data \
+    && chown -R vscode:vscode /home/vscode/.vscode-server \
+    && chown -R vscode:vscode "${VIRTUAL_ENV}" "${NAMETAGS_DIR}" "${IMAGES_DIR}" "${SHEETS_DIR}"
+
+USER vscode
+
+FROM runtime AS production
 
 USER nobody
 EXPOSE 8000
